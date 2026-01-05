@@ -28,6 +28,7 @@ interface SSHState {
   
   // Command Templates Actions
   addCommandTemplate: (template: Omit<CommandTemplate, 'id'>) => void;
+  setCommandTemplates: (templates: CommandTemplate[]) => void;
   updateCommandTemplate: (id: string, template: Partial<CommandTemplate>) => void;
   deleteCommandTemplate: (id: string) => void;
   
@@ -147,6 +148,11 @@ export const useSSHStore = create<SSHState>((set) => ({
     const newTemplates = [...state.commandTemplates, newTemplate];
     localStorage.setItem('ssh_templates', JSON.stringify(newTemplates));
     return { commandTemplates: newTemplates };
+  }),
+
+  setCommandTemplates: (templates) => set(() => {
+    localStorage.setItem('ssh_templates', JSON.stringify(templates));
+    return { commandTemplates: templates };
   }),
 
   updateCommandTemplate: (id, data) => set((state) => {

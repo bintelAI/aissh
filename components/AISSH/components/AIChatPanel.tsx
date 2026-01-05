@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -7,12 +8,13 @@ import {
   Send, Sparkles, Zap, BrainCircuit,
   PanelLeftClose, PlusCircle, Terminal as TerminalIcon, Copy, Check, Square,
   PanelLeft, Activity, Settings2, ShieldAlert, Thermometer, Cpu, X, ZapOff,
-  Wand2, ShieldCheck, FileDown, Eraser, ChevronDown
+  Wand2, ShieldCheck, FileDown, FileUp, Eraser, ChevronDown
 } from 'lucide-react';
 import { ChatMessage, LogEntry, ChatSession } from '../types/index';
 import { PromptConfigModal } from './PromptConfigModal';
 import { usePromptStore } from '../store/usePromptStore';
 import { useAIStore } from '../store/useAIStore';
+import { useSSHStore } from '../store/useSSHStore';
 import { chatWithAIStream, runAutonomousTask } from '../services/geminiService';
 import { sshManager } from '../services/sshService';
 
@@ -26,6 +28,7 @@ interface AIChatPanelProps {
 
 export interface AIChatPanelRef {
   triggerExternalPrompt: (text: string) => void;
+  createNewSession: (serverId: string) => void;
 }
 
 export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs, activeServerId, onInsertCommand, onSwitchServer, onAICommand }, ref) => {
@@ -44,6 +47,25 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
     return [{ id: '1', title: '新的运维会话', messages: [], mode: 'chat', createdAt: new Date() }];
   });
 
+  const { agentConfig, setAgentConfig } = useAIStore();
+  const { servers, setServers, folders, setFolders, commandTemplates, setCommandTemplates } = useSSHStore();
+  const { profiles, setProfiles, selectedProfileId, selectProfile } = usePromptStore();
+
+  const [activeSessionId, setActiveSessionId] = useState<string>(sessions[0]?.id || '1');
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
+  const [copyingCodeId, setCopyingCodeId] = useState<number | null>(null);
+  const [isPromptConfigOpen, setIsPromptConfigOpen] = useState(false);
+  
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stopSignalRef = useRef<boolean>(false);
+  const lastProcessedLogRef = useRef<number>(-1);
+
+  const confirmationResolverRef = useRef<((val: boolean) => void) | null>(null);
+
   // 监听 activeServerId 变化，自动切换或创建对应的会话
   useEffect(() => {
     if (!activeServerId) return;
@@ -57,43 +79,89 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
     } else {
       // 创建新会话
       const newId = Date.now().toString();
+      const server = servers.find(s => s.id === activeServerId);
       const newSession: ChatSession = {
         id: newId,
         serverId: activeServerId,
-        title: `会话: ${activeServerId}`,
+        title: `运维会话: ${server?.name || activeServerId}`,
         messages: [],
         mode: 'chat',
         createdAt: new Date()
       };
       setSessions(prev => [newSession, ...prev]);
       setActiveSessionId(newId);
+      lastProcessedLogRef.current = logs.length;
     }
-  }, [activeServerId]);
-  const { agentConfig, setAgentConfig } = useAIStore();
+  }, [activeServerId, servers, logs.length]);
 
-  const [activeSessionId, setActiveSessionId] = useState<string>(sessions[0]?.id || '1');
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [copyingId, setCopyingId] = useState<string | null>(null);
-  const [copyingCodeId, setCopyingCodeId] = useState<number | null>(null);
-  const [isPromptConfigOpen, setIsPromptConfigOpen] = useState(false);
-  const { profiles, selectedProfileId, selectProfile } = usePromptStore();
-  
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const stopSignalRef = useRef<boolean>(false);
-  const lastProcessedLogRef = useRef<number>(-1);
+  const handleExportConfig = () => {
+    const data = {
+      agentConfig,
+      servers,
+      folders,
+      commandTemplates,
+      promptProfiles: profiles,
+      exportDate: new Date().toISOString(),
+      version: '1.0.1'
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gemini-ssh-config-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
-  const confirmationResolverRef = useRef<((val: boolean) => void) | null>(null);
+  const handleImportConfig = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        if (data.agentConfig) setAgentConfig(data.agentConfig);
+        if (data.servers) setServers(data.servers);
+        if (data.folders) setFolders(data.folders);
+        if (data.commandTemplates) setCommandTemplates(data.commandTemplates);
+        if (data.promptProfiles) setProfiles(data.promptProfiles);
+        
+        alert('配置导入成功！');
+      } catch (err) {
+        console.error('Import failed:', err);
+        alert('导入失败：无效的配置文件');
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
+
+  const createNewSession = (serverId: string) => {
+    const newId = Date.now().toString();
+    const server = servers.find(s => s.id === serverId);
+    const newSession: ChatSession = {
+      id: newId,
+      serverId: serverId,
+      title: `运维会话: ${server?.name || serverId}`,
+      messages: [],
+      mode: 'chat',
+      createdAt: new Date()
+    };
+    setSessions(prev => [newSession, ...prev]);
+    setActiveSessionId(newId);
+    lastProcessedLogRef.current = logs.length;
+  };
 
   useImperativeHandle(ref, () => ({
     triggerExternalPrompt: (text: string) => {
       const prompt = `我对这段终端输出很感兴趣，请帮我分析并排查可能的问题：\n\n\`\`\`\n${text}\n\`\`\``;
       sendAIMessage(prompt, false);
-    }
+    },
+    createNewSession
   }));
 
   useEffect(() => {
@@ -781,8 +849,8 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
         </div>
       </div>
 
-      {isSettingsOpen && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+      {isSettingsOpen && createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
           <div className="w-full max-w-md bg-sci-obsidian border border-sci-cyan/30 shadow-[0_0_50px_rgba(0,243,255,0.1)] clip-corner overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-white/10 flex items-center justify-between bg-sci-panel/50">
               <div className="flex items-center gap-3">
@@ -796,6 +864,25 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
             </div>
 
             <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+              {/* 数据备份与还原 */}
+              <div className="space-y-3">
+                <label className="text-[11px] font-sci font-bold text-sci-text uppercase tracking-widest flex items-center gap-2">
+                  <ShieldCheck size={14} className="text-sci-cyan"/> 数据管理 (备份与还原)
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button 
+                    onClick={handleExportConfig}
+                    className="flex items-center justify-center gap-2 py-2 bg-sci-cyan/10 border border-sci-cyan/30 text-[11px] text-sci-cyan hover:bg-sci-cyan hover:text-black transition-all clip-corner font-sci font-bold uppercase tracking-widest"
+                  >
+                    <FileDown size={14} /> 导出配置
+                  </button>
+                  <label className="flex items-center justify-center gap-2 py-2 bg-sci-violet/10 border border-sci-violet/30 text-[11px] text-sci-violet hover:bg-sci-violet hover:text-black transition-all clip-corner font-sci font-bold uppercase tracking-widest cursor-pointer">
+                    <FileUp size={14} /> 导入配置
+                    <input type="file" accept=".json" onChange={handleImportConfig} className="hidden" />
+                  </label>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between p-4 bg-sci-cyan/5 border border-sci-cyan/20 clip-corner">
                 <div className="flex items-center gap-3">
                   <div className={`p-2 transition-colors ${agentConfig.autoSyncTerminal ? 'text-sci-cyan' : 'text-white/30'}`}><Wand2 size={18}/></div>
@@ -964,7 +1051,7 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
       {isPromptConfigOpen && <PromptConfigModal onClose={() => setIsPromptConfigOpen(false)} />}
     </div>
   );

@@ -1,12 +1,13 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { WebLinksAddon } from 'xterm-addon-web-links';
+import { SearchAddon } from 'xterm-addon-search';
 import 'xterm/css/xterm.css';
 import { LogEntry } from '../types/index';
 import { sshManager } from '../services/sshService';
-import { Terminal as TerminalIcon, Trash2, ArrowDownCircle, ShieldCheck, AlertTriangle, Info, Sparkles, X, Loader2, Square, Brain, Download, FileJson } from 'lucide-react';
+import { Terminal as TerminalIcon, Trash2, Sparkles, Loader2, Download, AlertTriangle } from 'lucide-react';
 import { predictCommandRisk } from '../services/geminiService';
 
 import { WebglAddon } from 'xterm-addon-webgl';
@@ -20,16 +21,60 @@ interface TerminalProps {
   onSelectionAI?: (text: string) => void;
   status: 'connected' | 'disconnected' | 'connecting' | 'error';
   commandToInsert?: string | null;
+  onSearchOpen?: () => void;
+  isSearching?: boolean;
 }
 
-export const Terminal: React.FC<TerminalProps> = ({ logs, serverId, onClear, onAnalyzeError, onSelectionAI, status, commandToInsert }) => {
+export interface TerminalHandle {
+  search: (text: string, direction: 'next' | 'prev', options?: { incremental?: boolean }) => boolean;
+  focus: () => void;
+}
+
+export const Terminal = forwardRef<TerminalHandle, TerminalProps>(({ 
+  logs, 
+  serverId, 
+  onClear, 
+  onAnalyzeError, 
+  onSelectionAI, 
+  status, 
+  commandToInsert,
+  onSearchOpen,
+  isSearching = false
+}, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const searchAddonRef = useRef<SearchAddon | null>(null);
+
+  // Update theme when isSearching changes
+  useEffect(() => {
+    if (xtermRef.current) {
+      xtermRef.current.options.theme = {
+        ...xtermRef.current.options.theme,
+        selectionBackground: isSearching ? '#ff2a00' : 'rgba(0, 243, 255, 0.3)',
+        selectionForeground: isSearching ? '#ffffff' : undefined,
+        selectionInactiveBackground: isSearching ? 'rgba(255, 42, 0, 0.3)' : 'rgba(0, 243, 255, 0.1)',
+      };
+    }
+  }, [isSearching]);
   const [selectionInfo, setSelectionInfo] = useState<{ text: string; x: number; y: number } | null>(null);
   const terminalContainerRef = useRef<HTMLDivElement>(null);
   
   const isConnected = status === 'connected';
+
+  useImperativeHandle(ref, () => ({
+    search: (text: string, direction: 'next' | 'prev', options?: { incremental?: boolean }) => {
+      if (!searchAddonRef.current || !text) return false;
+      if (direction === 'next') {
+        return searchAddonRef.current.findNext(text, options);
+      } else {
+        return searchAddonRef.current.findPrevious(text, options);
+      }
+    },
+    focus: () => {
+      xtermRef.current?.focus();
+    }
+  }));
 
   const isConnectedRef = useRef(isConnected);
   useEffect(() => {
@@ -54,6 +99,7 @@ export const Terminal: React.FC<TerminalProps> = ({ logs, serverId, onClear, onA
         foreground: '#c9d1d9',
         cursor: '#00f3ff',
         selectionBackground: 'rgba(0, 243, 255, 0.3)',
+        selectionInactiveBackground: 'rgba(0, 243, 255, 0.1)',
         black: '#0d1117',
         red: '#ff2a00',
         green: '#0aff00',
@@ -77,11 +123,15 @@ export const Terminal: React.FC<TerminalProps> = ({ logs, serverId, onClear, onA
 
     const fitAddon = new FitAddon();
     const webLinksAddon = new WebLinksAddon();
+    const searchAddon = new SearchAddon();
     
     term.loadAddon(fitAddon);
     term.loadAddon(webLinksAddon);
+    term.loadAddon(searchAddon);
     
     term.open(terminalRef.current);
+
+    searchAddonRef.current = searchAddon;
 
     let addonToDispose: { dispose(): void }[] = [];
 
@@ -111,19 +161,36 @@ export const Terminal: React.FC<TerminalProps> = ({ logs, serverId, onClear, onA
     // Use ResizeObserver for robust layout handling
     const resizeObserver = new ResizeObserver(() => {
       if (isDisposed) return;
-      if (fitAddonRef.current && xtermRef.current && terminalRef.current?.offsetParent) {
-        try {
-          fitAddonRef.current.fit();
-          sshManager.resize(xtermRef.current.cols, xtermRef.current.rows, serverId);
-        } catch (e) {
-          // Ignore fit errors if element is not ready
+      
+      // Use requestAnimationFrame to ensure the browser has finished layout
+      requestAnimationFrame(() => {
+        if (isDisposed) return;
+        if (fitAddonRef.current && xtermRef.current && terminalRef.current?.offsetParent) {
+          try {
+            fitAddonRef.current.fit();
+            sshManager.resize(xtermRef.current.cols, xtermRef.current.rows, serverId);
+          } catch (e) {
+            // Ignore fit errors if element is not ready
+          }
         }
-      }
+      });
     });
 
     if (terminalRef.current.parentElement) {
       resizeObserver.observe(terminalRef.current.parentElement);
     }
+
+    // Window resize fallback
+    const handleWindowResize = () => {
+      if (isDisposed) return;
+      if (fitAddonRef.current && xtermRef.current) {
+        try {
+          fitAddonRef.current.fit();
+          sshManager.resize(xtermRef.current.cols, xtermRef.current.rows, serverId);
+        } catch (e) {}
+      }
+    };
+    window.addEventListener('resize', handleWindowResize);
 
     term.focus();
 
@@ -132,6 +199,18 @@ export const Terminal: React.FC<TerminalProps> = ({ logs, serverId, onClear, onA
         if (!isDisposed && isConnectedRef.current && xtermRef.current) {
             sshManager.sendInput(data, serverId);
         }
+    });
+
+    // Handle Ctrl+F for search
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        if (onSearchOpen) {
+          onSearchOpen();
+        }
+        return false;
+      }
+      return true;
     });
 
     // Handle Selection for AI
@@ -144,17 +223,21 @@ export const Terminal: React.FC<TerminalProps> = ({ logs, serverId, onClear, onA
         }
     });
 
-    // Initial fit
-    const initialFitTimeout = setTimeout(() => {
-      if (!isDisposed && fitAddonRef.current && xtermRef.current) {
+    // Initial fit with multiple attempts
+    const triggerInitialFit = () => {
+      if (!isDisposed && fitAddonRef.current && xtermRef.current && terminalRef.current?.offsetParent) {
         fitAddonRef.current.fit();
-        sshManager.resize(term.cols, term.rows, serverId);
+        sshManager.resize(xtermRef.current.cols, xtermRef.current.rows, serverId);
       }
-    }, 100);
+    };
+
+    setTimeout(triggerInitialFit, 100);
+    setTimeout(triggerInitialFit, 500);
+    setTimeout(triggerInitialFit, 1000);
 
     return () => {
       isDisposed = true;
-      clearTimeout(initialFitTimeout);
+      window.removeEventListener('resize', handleWindowResize);
       resizeObserver.disconnect();
       
       // Manually dispose addons that might cause issues during term.dispose()
@@ -399,4 +482,6 @@ export const Terminal: React.FC<TerminalProps> = ({ logs, serverId, onClear, onA
       `}</style>
     </div>
   );
-};
+});
+
+Terminal.displayName = 'Terminal';

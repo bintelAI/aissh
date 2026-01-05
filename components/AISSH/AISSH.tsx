@@ -79,6 +79,12 @@ const AISSH: React.FC = () => {
   const handleSelectServer = (id: string) => {
     if (!openSessions.includes(id)) setOpenSessions(prev => [...prev, id]);
     setActiveSessionId(id);
+    
+    // 每次从菜单点击（ServerTree）时，通知 AI 面板创建新会话
+    if (aiChatPanelRef.current) {
+      aiChatPanelRef.current.createNewSession(id);
+    }
+
     const server = servers.find(s => s.id === id);
     if (server) {
       if (server.status === 'connected') return; // Already connected

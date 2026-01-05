@@ -12,6 +12,24 @@ export const BatchResultCompare: React.FC<BatchResultCompareProps> = ({ results,
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'side'>('grid');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showDiff, setShowDiff] = useState(true);
+
+  const referenceOutput = useMemo(() => {
+    if (results.length === 0) return '';
+    const counts = new Map<string, number>();
+    results.forEach(r => {
+      counts.set(r.output, (counts.get(r.output) || 0) + 1);
+    });
+    let maxCount = 0;
+    let reference = results[0].output;
+    counts.forEach((count, output) => {
+      if (count > maxCount) {
+        maxCount = count;
+        reference = output;
+      }
+    });
+    return reference;
+  }, [results]);
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -35,6 +53,35 @@ export const BatchResultCompare: React.FC<BatchResultCompareProps> = ({ results,
   };
 
   const commonOutput = getCommonOutput();
+
+  const renderContent = (content: string) => {
+    const refLines = referenceOutput.split('\n');
+    const lines = content.split('\n');
+    
+    return lines.map((line, i) => {
+      const isDifferent = showDiff && line !== refLines[i];
+      
+      if (!searchTerm) {
+        return (
+          <div key={i} className={`${isDifferent ? 'bg-sci-violet/20 border-l-2 border-sci-violet' : ''} px-1 min-h-[1.2em]`}>
+            {line || ' '}
+          </div>
+        );
+      }
+
+      const parts = line.split(new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+      return (
+        <div key={i} className={`${isDifferent ? 'bg-sci-violet/20 border-l-2 border-sci-violet' : ''} px-1 min-h-[1.2em]`}>
+          {parts.map((part, index) => 
+            part.toLowerCase() === searchTerm.toLowerCase() ? (
+              <span key={index} className="bg-sci-cyan text-black font-bold px-0.5 rounded-sm shadow-[0_0_5px_rgba(0,243,255,0.5)]">{part}</span>
+            ) : part
+          )}
+          {!line && ' '}
+        </div>
+      );
+    });
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
@@ -141,7 +188,7 @@ export const BatchResultCompare: React.FC<BatchResultCompareProps> = ({ results,
                     </div>
                   </div>
                   <pre className="flex-1 p-3 font-mono text-[10px] whitespace-pre-wrap overflow-y-auto max-h-[200px] custom-scrollbar bg-black/20 text-sci-text/80">
-                    {result.output}
+                    {renderContent(result.output)}
                   </pre>
                 </div>
               ))}
@@ -175,7 +222,7 @@ export const BatchResultCompare: React.FC<BatchResultCompareProps> = ({ results,
                     )}
                   </div>
                   <pre className="p-4 font-mono text-[10px] whitespace-pre-wrap bg-black/20 text-sci-text/80">
-                    {result.output}
+                    {renderContent(result.output)}
                   </pre>
                 </div>
               ))}
@@ -204,7 +251,7 @@ export const BatchResultCompare: React.FC<BatchResultCompareProps> = ({ results,
                     </button>
                   </div>
                   <pre className="flex-1 p-4 font-mono text-[11px] whitespace-pre-wrap overflow-y-auto custom-scrollbar bg-black/40 text-sci-text/90 leading-relaxed">
-                    {result.output}
+                    {renderContent(result.output)}
                   </pre>
                 </div>
               ))}
