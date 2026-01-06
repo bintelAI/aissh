@@ -21,10 +21,23 @@ fn main() {
 
       writeln!(log_file, "--- Sidecar starting ---").unwrap();
 
+      #[cfg(windows)]
+      let sidecar_result = app.shell().sidecar("back-rust")
+          .args(["--windows-hide"]); // 这里虽然 sidecar 本身不一定处理这个 flag，但主要通过下方的 spawn 逻辑控制
+      
+      #[cfg(not(windows))]
       let sidecar_result = app.shell().sidecar("back-rust");
       
       match sidecar_result {
-        Ok(sidecar) => {
+        Ok(mut sidecar) => {
+          // 在 Windows 上隐藏控制台窗口
+          #[cfg(windows)]
+          {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            sidecar = sidecar.creation_flags(CREATE_NO_WINDOW);
+          }
+
           match sidecar.spawn() {
             Ok((mut rx, child)) => {
               // 将 child 存入状态中，以便后续关闭

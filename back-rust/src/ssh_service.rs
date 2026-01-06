@@ -12,6 +12,10 @@ enum SshChannelCmd {
     Write(Vec<u8>),
     Resize { cols: u32, rows: u32 },
     Disconnect,
+    Exec {
+        command: String,
+        reply_tx: mpsc::Sender<Result<String, String>>,
+    },
 }
 
 struct SshSession {
@@ -59,40 +63,40 @@ impl SshService {
             };
 
             let tcp =
-                match TcpStream::connect_timeout(&socket_addr, std::time::Duration::from_secs(5)) {
+                match TcpStream::connect_timeout(&socket_addr, std::time::Duration::from_secs(15)) {
                     Ok(t) => {
                         let _ = t.set_nonblocking(false);
                         t
                     }
                     Err(e) => {
-                        error!("TCP connection failed for server {}: {}", server_id, e);
+                        error!("TCP connection failed for server {} ({}:{}): {}", server_id, ip, port, e);
                         let _ = socket.emit(
                             "ssh-error",
                             &SshErrorPayload {
                                 server_id,
-                                message: format!("Connection error: {}", e),
+                                message: format!("Connection timeout or failed ({}:{}): {}", ip, port, e),
                             },
                         );
                         return;
                     }
                 };
 
-            info!("TCP connected, performing SSH handshake...");
+            info!("TCP connected to {}:{}, performing SSH handshake...", ip, port);
             let mut sess = Session::new().unwrap();
             sess.set_tcp_stream(tcp);
-            sess.set_timeout(5000);
+            sess.set_timeout(15000);
             if let Err(e) = sess.handshake() {
-                error!("SSH handshake failed: {}", e);
+                error!("SSH handshake failed for {} ({}:{}): {}", server_id, ip, port, e);
                 let _ = socket.emit(
                     "ssh-error",
                     &SshErrorPayload {
                         server_id,
-                        message: format!("Connection error: {}", e),
+                        message: format!("SSH handshake failed ({}:{}): {}", ip, port, e),
                     },
                 );
                 return;
             }
-            info!("SSH handshake done for server {}", server_id);
+            info!("SSH handshake done for server {} ({}:{})", server_id, ip, port);
 
             if let Some(password) = config.password {
                 info!("Attempting password auth for user: {} on server: {}", config.username, server_id);
@@ -215,6 +219,25 @@ impl SshService {
                                 disconnect_requested = true;
                                 break 'outer;
                             }
+                            Ok(SshChannelCmd::Exec { command, reply_tx }) => {
+                                let result = (|| {
+                                    let sess = session_inner.lock().unwrap();
+                                    let prev_timeout = sess.timeout();
+                                    sess.set_timeout(60000); // 执行命令时设置 60s 超时
+
+                                    let res = (|| {
+                                        let mut exec_channel = sess.channel_session().map_err(|e| e.to_string())?;
+                                        exec_channel.exec(&command).map_err(|e| e.to_string())?;
+                                        let mut output = String::new();
+                                        exec_channel.read_to_string(&mut output).map_err(|e| e.to_string())?;
+                                        Ok(output)
+                                    })();
+
+                                    sess.set_timeout(prev_timeout);
+                                    res
+                                })();
+                                let _ = reply_tx.send(result);
+                            }
                             Err(mpsc::TryRecvError::Empty) => break,
                             Err(mpsc::TryRecvError::Disconnected) => {
                                 disconnect_requested = true;
@@ -321,24 +344,22 @@ impl SshService {
         command: String,
     ) -> Result<String, String> {
         let key = format!("{}:{}", socket_id, server_id);
-        let session_arc = {
+        let tx = {
             let sessions = self.sessions.lock().unwrap();
             sessions
                 .get(&key)
-                .map(|s| s.session.clone())
+                .map(|s| s.tx.clone())
                 .ok_or("Session not found")?
         };
 
-        task::spawn_blocking(move || {
-            let sess = session_arc.lock().unwrap();
-            let mut channel = sess.channel_session().map_err(|e| e.to_string())?;
-            channel.exec(&command).map_err(|e| e.to_string())?;
+        let (reply_tx, reply_rx) = mpsc::channel();
+        tx.send(SshChannelCmd::Exec { command, reply_tx })
+            .map_err(|e| e.to_string())?;
 
-            let mut output = String::new();
-            channel
-                .read_to_string(&mut output)
-                .map_err(|e| e.to_string())?;
-            Ok(output)
+        task::spawn_blocking(move || {
+            reply_rx
+                .recv()
+                .map_err(|e| e.to_string())?
         })
         .await
         .map_err(|e| e.to_string())?

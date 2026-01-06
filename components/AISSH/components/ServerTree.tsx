@@ -151,7 +151,7 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
             <ServerIcon size={16} className="animate-pulse" />
           </div>
           <div>
-            <h2 className="text-sm font-sci font-bold text-sci-text uppercase tracking-widest">神经节点</h2>
+            <h2 className="text-sm font-sci font-bold text-sci-text uppercase tracking-widest">方块 AI 助手</h2>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="flex h-1.5 w-1.5 rounded-full bg-sci-cyan animate-pulse"></span>
               <span className="text-[9px] text-sci-cyan/40 uppercase tracking-tighter font-bold font-sci">网络上行活跃</span>

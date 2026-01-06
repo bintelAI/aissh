@@ -53,19 +53,24 @@ interface SSHState {
 
 const getInitialServers = (): Server[] => {
   const saved = localStorage.getItem('ssh_servers');
-  if (saved) return JSON.parse(saved);
-  return [
-    { id: '1', name: 'Web Server 01', ip: '192.168.0.1', username: 'root', port: 22, status: 'disconnected', parentId: 'f1' },
-    { id: '2', name: 'MySQL Master', ip: '10.0.0.5', username: 'admin', port: 22, status: 'disconnected', parentId: 'f2' },
-  ];
+  let servers: Server[] = [];
+  if (saved) {
+    servers = JSON.parse(saved);
+  } else {
+    servers = [
+      { id: '1', name: 'Web Server 01', ip: '192.168.0.1', username: 'root', port: 22, status: 'disconnected', parentId: 'f1' },
+      { id: '2', name: 'MySQL Master', ip: '10.0.0.5', username: 'admin', port: 22, status: 'disconnected', parentId: 'f2' },
+    ];
+  }
+  // 核心逻辑：刷新页面时，强制所有服务器状态回归 disconnected
+  return servers.map(s => ({ ...s, status: 'disconnected' }));
 };
 
 const getInitialFolders = (): Folder[] => {
   const saved = localStorage.getItem('ssh_folders');
   if (saved) return JSON.parse(saved);
   return [
-    { id: 'f1', name: '生产环境', parentId: null },
-    { id: 'f2', name: '数据库集群', parentId: null },
+
   ];
 };
 

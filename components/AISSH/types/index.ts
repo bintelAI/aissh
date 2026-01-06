@@ -59,6 +59,7 @@ export interface AgentConfig {
   customUrl?: string;
   customKey?: string;
   customModelName?: string;
+  maxMemoryMessages?: number; // AI 记忆的消息轮数
 }
 
 export interface AIChatProps {

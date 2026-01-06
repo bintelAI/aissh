@@ -43,7 +43,8 @@ const getInitialConfig = (): AgentConfig => {
     useCustomModel: false,
     customUrl: '',
     customKey: '',
-    customModelName: ''
+    customModelName: '',
+    maxMemoryMessages: 10
   };
 
   const saved = localStorage.getItem('ssh_agent_config');

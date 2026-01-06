@@ -12,7 +12,8 @@ const getAIClient = () => {
     return new OpenAI({
       apiKey: agentConfig.customKey,
       baseURL: agentConfig.customUrl,
-      dangerouslyAllowBrowser: true
+      dangerouslyAllowBrowser: true,
+      timeout: 60000 // 增加到 60 秒超时，防止长输出导致 socket 中断
     });
   }
 
@@ -24,7 +25,8 @@ const getAIClient = () => {
     return new OpenAI({
       apiKey: envKey,
       baseURL: envUrl,
-      dangerouslyAllowBrowser: true
+      dangerouslyAllowBrowser: true,
+      timeout: 60000 // 增加到 60 秒超时
     });
   }
 
@@ -112,8 +114,9 @@ export class GeminiAIService implements AIService {
     shouldStop?: () => boolean
   ) {
     try {
+      const { agentConfig } = useAIStore.getState();
       const devicePrompt = getSelectedPrompt();
-      const MAX_HISTORY_MESSAGES = 20;
+      const MAX_HISTORY_MESSAGES = agentConfig.maxMemoryMessages || 10;
       
       // 过滤掉已经在 history 中的最后一条消息，避免重复
       let recentHistory = history;
@@ -128,7 +131,8 @@ export class GeminiAIService implements AIService {
       const mappedHistory: OpenAI.Chat.ChatCompletionMessageParam[] = recentHistory.map((m) => {
         const role: 'user' | 'assistant' | 'system' =
           m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user';
-        const content = m.content.length > 5000 ? m.content.slice(0, 5000) + "..." : m.content;
+        // 限制单条历史消息长度为 4000 字符，防止上下文过大导致超时
+        const content = m.content.length > 4000 ? m.content.slice(0, 4000) + "..." : m.content;
         return { role, content };
       });
 
@@ -230,7 +234,10 @@ export const runAutonomousTask = async (
 2. 你会看到命令的实际输出，请根据输出判断成功与否。
 3. 如果用户拒绝了某个危险命令，请尝试寻找更安全的替代方案。
 4. 只有在确认目标达成后，才将 isDone 设为 true。
-5. 当你决定任务完成时，summary 字段只需填写简单的 'DONE'，不需要在这里写详细报告。`;
+5. 当你决定任务完成时，summary 字段只需填写简单的 'DONE'，不需要在这里写详细报告。
+6. **关键：** 在最后的报告总结中，**禁止输出冗长且无关紧要的命令行原始日志**。应提取命令的关键执行结果进行精炼展示。对于适合结构化展示的数据（如文件列表、进程信息、资源对比等），**必须优先使用 Markdown 表格输出**。若执行过程中存在异常或报错，需保留并展示异常部分的原始数据以便排查。
+`;
+
 
   if (config.safeMode) {
     systemPrompt += `\n5. 安全模式开启：如果你计划执行 rm, kill, reboot 等危险操作，系统会要求用户手动确认。`;
@@ -269,16 +276,29 @@ export const runAutonomousTask = async (
 
       const plan = JSON.parse(response.choices[0]?.message?.content || "{}");
 
-      if (plan.isDone) {
-        await onStep({ thought: plan.thought, isDone: true, summary: "" });
+      if (plan.isDone || attempts + 1 >= maxAttempts) {
+        const isTimeout = !plan.isDone && attempts + 1 >= maxAttempts;
+        await onStep({ 
+          thought: isTimeout ? "达到最大迭代次数，正在生成最终汇总报告..." : plan.thought, 
+          isDone: true, 
+          summary: "" 
+        });
         
-        const summaryPrompt = `任务已完成。请根据以下设备配置生成一份详细的 Markdown 格式总结报告。
-${devicePrompt ? `\n${devicePrompt}\n` : ''}
+        const summaryPrompt = isTimeout 
+          ? `任务执行已达到最大尝试次数 (${maxAttempts} 次) 而被迫中断。请根据已完成的执行过程生成一份 Markdown 格式的阶段性汇总报告。
 要求：
-1. 包含执行结果的详细说明。
-2. 如果涉及数据对比或列表展示，必须使用 Markdown 表格。
-3. 结构清晰，使用标题和代码块。
-4. 语气专业。`;
+1. 明确指出任务未完全达成，并分析可能的原因（如目标过于复杂、进入逻辑循环或环境限制）。
+2. 汇总已成功完成的步骤和关键产出。
+3. 提供后续手动干预或优化的建议。
+4. 遵守之前的精简日志、数据表格化和专业简洁准则。`
+          : `任务已完成。请根据上述执行过程和设备配置生成一份精炼的 Markdown 格式总结报告。
+${devicePrompt ? `\n${devicePrompt}\n` : ''}
+报告准则（务必严格遵守）：
+1. **精简日志**：禁止直接在报告中堆砌大量的命令原始输出日志。只需提取关键的执行结果、配置信息或状态反馈。
+2. **异常保留**：如果执行过程中出现报错、异常或非预期结果，必须保留并清晰展示该异常部分的原始数据。
+3. **数据表格化**：凡是涉及多项对比、列表展示（如文件清单、进程状态、配置项）、资源统计或任何具有结构化特征的数据，**必须优先使用 Markdown 表格进行呈现**，以确保信息的直观与专业。
+4. **结构化呈现**：按步骤或功能模块划分标题，重点说明“执行动作”与“最终产出”。
+5. **专业简洁**：作为运维专家，直接给出结论和关键发现，避免冗余描述。`;
         
         history.push({ role: 'assistant', content: JSON.stringify(plan) });
         
@@ -298,11 +318,19 @@ ${devicePrompt ? `\n${devicePrompt}\n` : ''}
             const content = chunk.choices[0]?.delta?.content;
             if (content) {
               accumulatedSummary += content;
-              await onStep({ thought: plan.thought, isDone: true, summary: accumulatedSummary });
+              await onStep({ 
+                thought: isTimeout ? "任务执行超时，已生成阶段性报告。" : plan.thought, 
+                isDone: true, 
+                summary: accumulatedSummary 
+              });
             }
           }
         } catch (e) {
-          await onStep({ thought: plan.thought, isDone: true, summary: accumulatedSummary || "生成总结报告时发生错误。" });
+          await onStep({ 
+            thought: plan.thought, 
+            isDone: true, 
+            summary: accumulatedSummary || "生成总结报告时发生错误。" 
+          });
         }
         
         return;
@@ -325,9 +353,9 @@ ${devicePrompt ? `\n${devicePrompt}\n` : ''}
         }
       }
 
-      const MAX_RESULT_LENGTH = 10000;
+      const MAX_RESULT_LENGTH = 6000;
       if (commandResult && commandResult.length > MAX_RESULT_LENGTH) {
-        commandResult = commandResult.slice(0, MAX_RESULT_LENGTH) + "\n\n(输出内容过长，已截断...)";
+        commandResult = commandResult.slice(0, MAX_RESULT_LENGTH) + "\n\n(输出内容过长，已截断，请基于现有信息分析，如需更多数据请通过命令再次获取)";
       }
 
       history.push({
@@ -339,8 +367,8 @@ ${devicePrompt ? `\n${devicePrompt}\n` : ''}
         content: `命令执行结果:\n${commandResult || "无输出内容"}`
       });
 
-      if (history.length > 30) {
-        history = [history[0], ...history.slice(-20)];
+      if (history.length > (config.maxMemoryMessages || 10) * 2) {
+        history = [history[0], ...history.slice(-(config.maxMemoryMessages || 10) * 2)];
       }
 
       attempts++;
@@ -350,8 +378,6 @@ ${devicePrompt ? `\n${devicePrompt}\n` : ''}
       return;
     }
   }
-
-  await onStep({ thought: "达到最大尝试次数，任务未能自动完成。", isDone: true, summary: "超时退出。" });
 };
 
 export const analyzeLogs = async (log: string) => {

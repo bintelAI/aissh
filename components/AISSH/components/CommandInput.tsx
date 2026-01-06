@@ -187,15 +187,6 @@ export const CommandInput: React.FC<CommandInputProps> = ({ onInsertCommand }) =
             <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-sci-cyan/50 pointer-events-none group-hover:text-sci-cyan transition-colors" />
           </div>
 
-          <div className="flex items-center gap-2 text-sci-cyan font-bold text-[10px] shrink-0 bg-sci-cyan/5 px-2 py-1.5 uppercase tracking-tighter border border-sci-cyan/10">
-            {operationMode === 'compare' ? (
-              <><ArrowRightLeft size={12} className={isComparing ? "animate-spin" : ""}/> COMPARE:{openSessions.length}</>
-            ) : operationMode === 'batch' ? (
-              <><Command size={12} className="animate-pulse"/> BATCH:{openSessions.length}</>
-            ) : (
-              <><TerminalIcon size={12}/> SINGLE</>
-            )}
-          </div>
 
           <div className="flex items-center gap-1 shrink-0 bg-black/40 border border-white/10 px-2 py-1 relative">
             <span className="text-[10px] text-white/40 uppercase tracking-widest">类型</span>

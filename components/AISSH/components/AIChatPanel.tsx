@@ -8,7 +8,7 @@ import {
   Send, Sparkles, Zap, BrainCircuit,
   PanelLeftClose, PlusCircle, Terminal as TerminalIcon, Copy, Check, Square,
   PanelLeft, Activity, Settings2, ShieldAlert, Thermometer, Cpu, X, ZapOff,
-  Wand2, ShieldCheck, FileDown, FileUp, Eraser, ChevronDown
+  Wand2, ShieldCheck, FileDown, FileUp, Eraser, ChevronDown, History
 } from 'lucide-react';
 import { ChatMessage, LogEntry, ChatSession } from '../types/index';
 import { PromptConfigModal } from './PromptConfigModal';
@@ -61,6 +61,8 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
   const [isPromptConfigOpen, setIsPromptConfigOpen] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
   const stopSignalRef = useRef<boolean>(false);
   const lastProcessedLogRef = useRef<number>(-1);
 
@@ -167,6 +169,19 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
   useEffect(() => {
     localStorage.setItem('ssh_ai_sessions', JSON.stringify(sessions));
   }, [sessions]);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+    
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -576,7 +591,7 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
   );
 
   return (
-    <div className="flex h-full bg-sci-base border-l border-white/5 shadow-2xl relative">
+    <div ref={containerRef} className="flex h-full bg-sci-base border-l border-white/5 shadow-2xl relative">
       <div className={`bg-sci-obsidian border-r border-white/5 flex flex-col transition-all duration-300 ${showHistory ? 'w-64' : 'w-0 overflow-hidden'}`}>
         <div className="p-4 flex items-center justify-between border-b border-white/5">
           <div className="text-[10px] font-black uppercase tracking-widest text-sci-cyan/40 font-sci">任务会话</div>
@@ -753,7 +768,7 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
                   className={`h-7 px-3 flex items-center justify-center transition-all ${activeSession.mode === 'chat' ? 'bg-sci-cyan text-black font-bold' : 'bg-transparent text-sci-text hover:text-sci-cyan'}`}
                 >
                   <Zap size={12}/>
-                  <span className="ml-2 text-[10px] font-sci uppercase tracking-wider">聊天</span>
+                  {containerWidth > 380 && <span className="ml-2 text-[10px] font-sci uppercase tracking-wider">聊天</span>}
                 </button>
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black text-[10px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 border border-white/10 font-sci">聊天模式</div>
               </div>
@@ -763,16 +778,17 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
                   className={`h-7 px-3 flex items-center justify-center transition-all ${activeSession.mode === 'action' ? 'bg-sci-violet text-black font-bold' : 'bg-transparent text-sci-text hover:text-sci-violet'}`}
                 >
                   <BrainCircuit size={12}/>
-                  <span className="ml-2 text-[10px] font-sci uppercase tracking-wider">Agent</span>
+                  {containerWidth > 380 && <span className="ml-2 text-[10px] font-sci uppercase tracking-wider">Agent</span>}
                 </button>
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black text-[10px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 border border-white/10 font-sci">Agent 模式</div>
               </div>
             </div>
 
             <div className="flex items-center gap-1">
-              <div className="group relative">
-                <div className="flex items-center bg-black/40 border border-white/10 px-2 py-1">
-                  <span className="text-[10px] text-white/40 uppercase tracking-widest mr-1">类型</span>
+              {containerWidth > 520 && (
+                <div className="group relative">
+                  <div className="flex items-center bg-black/40 border border-white/10 px-2 py-1">
+                    <span className="text-[10px] text-white/40 uppercase tracking-widest mr-1">类型</span>
                   <select
                     value={selectedProfileId || ''}
                     onChange={(e) => selectProfile(e.target.value)}
@@ -785,6 +801,7 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
                   <ChevronDown size={12} className="ml-[-18px] text-sci-violet/50 pointer-events-none" />
                 </div>
               </div>
+              )}
               <div className="group relative">
                 <button 
                   onClick={handleClearSession} 
@@ -839,12 +856,12 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
               {isLoading ? (
                 <>
                   <Square size={16} fill="currentColor" className="animate-pulse" />
-                  <span>中止</span>
+                  {containerWidth > 400 && <span>中止</span>}
                 </>
               ) : (
                 <>
                   <Send size={16}/>
-                  <span>传输</span>
+                  {containerWidth > 400 && <span>传输</span>}
                 </>
               )}
             </button>
@@ -910,11 +927,27 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
                   <span className="text-xs font-mono text-sci-cyan bg-sci-cyan/10 px-2 py-0.5 border border-sci-cyan/20">{agentConfig.maxAttempts}</span>
                 </div>
                 <input 
-                  type="range" min="1" max="20" 
+                  type="range" min="1" max="50" 
                   value={agentConfig.maxAttempts} 
                   onChange={e => setAgentConfig({...agentConfig, maxAttempts: parseInt(e.target.value)})} 
                   className="w-full h-1 bg-white/10 appearance-none cursor-pointer accent-sci-cyan" 
                 />
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-[11px] font-sci font-bold text-sci-text uppercase tracking-widest flex items-center gap-2">
+                    <History size={14} className="text-sci-violet"/> 上下文记忆轮数
+                  </label>
+                  <span className="text-xs font-mono text-sci-violet bg-sci-violet/10 px-2 py-0.5 border border-sci-violet/20">{agentConfig.maxMemoryMessages || 10}</span>
+                </div>
+                <input 
+                  type="range" min="1" max="50" 
+                  value={agentConfig.maxMemoryMessages || 10} 
+                  onChange={e => setAgentConfig({...agentConfig, maxMemoryMessages: parseInt(e.target.value)})} 
+                  className="w-full h-1 bg-white/10 appearance-none cursor-pointer accent-sci-violet" 
+                />
+                <p className="text-[9px] text-white/40 font-sci italic">控制 AI 记忆的对话轮数，数值越大消耗 Token 越多。</p>
               </div>
 
               <div className="space-y-3">
