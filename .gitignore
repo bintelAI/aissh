@@ -41,7 +41,7 @@ backupDel/ServerList.tsx.bak
 自定义组件.md
 STYLE_GUIDE.md
 TECHNICAL_DOC.md
-pnpm-lock.yaml
+# pnpm-lock.yaml
 .vercel/project.json
 release/*
 back-rust/target/.rustc_info.json
