@@ -630,11 +630,11 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
           className="h-14 px-4 bg-sci-panel/80 backdrop-blur-md flex items-center justify-between border-b border-white/5 shrink-0 relative z-20"
           style={{ WebkitAppRegion: 'drag' } as any}
         >
-          <div className="flex items-center gap-3">
-            {!showHistory && <button style={{ WebkitAppRegion: 'no-drag' } as any} className="p-1.5 hover:bg-white/5 text-sci-text/60 hover:text-sci-cyan transition-colors" onClick={() => setShowHistory(true)}><PanelLeft size={18}/></button>}
-            <div className="truncate">
+          <div className="flex items-center gap-3 min-w-0">
+            {!showHistory && <button style={{ WebkitAppRegion: 'no-drag' } as any} className="p-1.5 hover:bg-white/5 text-sci-text/60 hover:text-sci-cyan transition-colors shrink-0" onClick={() => setShowHistory(true)}><PanelLeft size={18}/></button>}
+            <div className="truncate min-w-0">
               <h2 className="font-sci font-bold text-sm truncate text-sci-text uppercase tracking-widest">{activeSession.title}</h2>
-              <div className="text-[9px] text-sci-cyan/70 uppercase tracking-[0.2em] font-black font-sci">神经链路 AI 助手</div>
+              <div className="text-[9px] text-sci-cyan/70 uppercase tracking-[0.2em] font-black font-sci truncate">神经链路 AI 助手</div>
             </div>
           </div>
           <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as any}>
@@ -758,7 +758,7 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
         {/* 输入区 */}
         <div className="p-4 bg-sci-panel/80 border-t border-white/5 backdrop-blur-md relative z-20">
           <div className="flex items-center justify-between mb-3 px-1">
-            <div className="flex bg-black/40 p-1 border border-white/5 gap-1 clip-corner">
+            <div className="flex bg-black/40 p-1 border border-white/5 gap-1 clip-corner shrink-0">
               <div className="group relative">
                 <button 
                   onClick={() => {
@@ -785,23 +785,22 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
             </div>
 
             <div className="flex items-center gap-1">
-              {containerWidth > 520 && (
-                <div className="group relative">
-                  <div className="flex items-center bg-black/40 border border-white/10 px-2 py-1">
-                    <span className="text-[10px] text-white/40 uppercase tracking-widest mr-1">类型</span>
+              <div className="group relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-sci-violet/10 to-transparent rounded opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div className="relative flex items-center bg-black/80 border border-white/20 px-2 py-1 group hover:border-sci-violet/50 hover:shadow-[0_0_15px_rgba(139,92,246,0.3)] transition-all duration-300">
+                    {containerWidth > 520 && <span className="text-[10px] text-white/40 uppercase tracking-widest mr-1 group-hover:text-sci-violet/70 transition-colors">类型</span>}
                   <select
                     value={selectedProfileId || ''}
                     onChange={(e) => selectProfile(e.target.value)}
-                    className="appearance-none bg-transparent pl-1 pr-5 py-1 text-[10px] font-bold uppercase tracking-widest text-sci-violet outline-none cursor-pointer"
+                    className={`appearance-none bg-transparent pl-1 pr-5 py-1 text-[10px] font-bold uppercase tracking-widest text-sci-violet outline-none cursor-pointer hover:text-sci-violet/90 transition-colors ${containerWidth <= 520 ? 'w-24' : ''}`}
                   >
                     {profiles.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </select>
-                  <ChevronDown size={12} className="ml-[-18px] text-sci-violet/50 pointer-events-none" />
+                  <ChevronDown size={10} className="ml-[-18px] text-sci-violet/60 pointer-events-none group-hover:text-sci-violet group-hover:rotate-180 transition-all duration-300" />
                 </div>
               </div>
-              )}
               <div className="group relative">
                 <button 
                   onClick={handleClearSession} 

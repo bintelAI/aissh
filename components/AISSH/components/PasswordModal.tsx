@@ -34,10 +34,10 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ serverName, onClos
             </div>
             <div>
               <h3 className="font-sci font-bold text-lg text-sci-text uppercase tracking-widest">
-                Authentication Required
+                需要身份验证
               </h3>
               <p className="text-[10px] text-sci-cyan/40 uppercase tracking-[0.2em] font-bold font-sci">
-                Link Secure to: {serverName}
+                安全连接到: {serverName}
               </p>
             </div>
           </div>
@@ -53,7 +53,7 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ serverName, onClos
           <div className="space-y-2 group">
             <label className="flex items-center gap-2 text-[10px] font-sci font-bold text-sci-cyan/60 uppercase tracking-widest">
               <Key size={12} />
-              Neural Key (Password)
+              神经密钥 (密码)
             </label>
             <div className="relative">
               <input 
@@ -73,7 +73,7 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ serverName, onClos
               {remember && <ShieldCheck size={12} className="text-black" />}
             </div>
             <span className="text-[10px] font-sci font-bold text-sci-dim uppercase tracking-widest group-hover:text-sci-text transition-colors">
-              Store credentials in local vault
+              在本地保险库保存凭据
             </span>
           </div>
 
@@ -84,7 +84,7 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ serverName, onClos
               type="button"
               size="sm"
             >
-              Cancel
+              取消
             </Button>
             <Button 
               variant="primary"
@@ -93,7 +93,7 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ serverName, onClos
               className="px-8"
               disabled={!password}
             >
-              Link Node
+              连接节点
             </Button>
           </div>
         </form>

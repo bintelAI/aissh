@@ -43,10 +43,10 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ onClose, onSave,
             </div>
             <div>
               <h3 className="font-sci font-bold text-lg text-sci-text uppercase tracking-widest">
-                {initialData ? 'Update Node' : 'Initialize Node Link'}
+                {initialData ? '更新节点' : '初始化节点连接'}
               </h3>
               <p className="text-[10px] text-sci-cyan/40 uppercase tracking-[0.2em] font-bold font-sci">
-                {initialData ? 'Modify uplink configuration' : 'Establish new grid connection'}
+                {initialData ? '修改上行链路配置' : '建立新的网格连接'}
               </p>
             </div>
           </div>
@@ -65,13 +65,13 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ onClose, onSave,
             <div className="col-span-2 space-y-2 group">
               <label className="flex items-center gap-2 text-[10px] font-sci font-bold text-sci-cyan/60 uppercase tracking-widest">
                 <Shield size={12} />
-                Neural Node Alias
+                神经节点别名
               </label>
               <div className="relative">
                 <input 
                   autoFocus
                   className="w-full bg-black/40 border border-white/10 px-4 py-2.5 font-sci text-sm focus:outline-none focus:border-sci-cyan/50 text-sci-text transition-all group-hover:border-white/20" 
-                  placeholder="e.g. Production Cluster Alpha" 
+                  placeholder="例如：生产集群 Alpha" 
                   value={formData.name} 
                   onChange={e => setFormData({...formData, name: e.target.value})}
                 />
@@ -83,7 +83,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ onClose, onSave,
             <div className="space-y-2 group">
               <label className="flex items-center gap-2 text-[10px] font-sci font-bold text-sci-cyan/60 uppercase tracking-widest">
                 <Globe size={12} />
-                Target IP / Host
+                目标 IP / 主机
               </label>
               <input 
                 className="w-full bg-black/40 border border-white/10 px-4 py-2.5 font-mono text-sm focus:outline-none focus:border-sci-cyan/50 text-sci-text transition-all group-hover:border-white/20" 
@@ -97,7 +97,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ onClose, onSave,
             <div className="space-y-2 group">
               <label className="flex items-center gap-2 text-[10px] font-sci font-bold text-sci-cyan/60 uppercase tracking-widest">
                 <PortIcon size={12} />
-                Uplink Port
+                上行端口
               </label>
               <input 
                 className="w-full bg-black/40 border border-white/10 px-4 py-2.5 font-mono text-sm focus:outline-none focus:border-sci-cyan/50 text-sci-text transition-all group-hover:border-white/20" 
@@ -110,7 +110,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ onClose, onSave,
             <div className="space-y-2 group">
               <label className="flex items-center gap-2 text-[10px] font-sci font-bold text-sci-cyan/60 uppercase tracking-widest">
                 <User size={12} />
-                Access Identity
+                访问身份
               </label>
               <input 
                 className="w-full bg-black/40 border border-white/10 px-4 py-2.5 font-sci text-sm focus:outline-none focus:border-sci-cyan/50 text-sci-text transition-all group-hover:border-white/20" 
@@ -124,7 +124,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ onClose, onSave,
             <div className="space-y-2 group">
               <label className="flex items-center gap-2 text-[10px] font-sci font-bold text-sci-cyan/60 uppercase tracking-widest">
                 <Key size={12} />
-                Neural Key
+                神经密钥
               </label>
               <input 
                 type="password" 

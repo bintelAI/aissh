@@ -89,6 +89,7 @@ export interface ServerTreeProps {
   onEditFolder: (id: string, data: Partial<Folder>) => void;
   onDeleteFolder: (id: string) => void;
   onMove: (type: 'server' | 'folder', id: string, newParentId: string | null) => void;
+  width?: number;
 }
 
 export interface CommandTemplate {

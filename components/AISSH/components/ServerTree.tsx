@@ -4,7 +4,7 @@ import { Server, Folder, ServerTreeProps } from '../types/index';
 import { ChevronRight, ChevronDown, Folder as FolderIcon, Server as ServerIcon, Plus, FolderPlus, Edit3, Trash2 } from 'lucide-react';
 
 export const ServerTree: React.FC<ServerTreeProps> = ({ 
-  servers, folders, activeServerId, onSelectServer, onAddServer, onEditServer, onDeleteServer, onAddFolder, onEditFolder, onDeleteFolder, onMove 
+  servers, folders, activeServerId, onSelectServer, onAddServer, onEditServer, onDeleteServer, onAddFolder, onEditFolder, onDeleteFolder, onMove, width = 260
 }) => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
@@ -79,7 +79,7 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
                   onClick={(e) => e.stopPropagation()}
                 />
               ) : (
-                <span className="text-[11px] flex-1 truncate select-none font-sci font-medium text-sci-text tracking-wide">{folder.name}</span>
+                <span className={`text-[11px] flex-1 truncate select-none font-sci font-medium text-sci-text tracking-wide ${width < 180 ? 'hidden' : ''}`}>{folder.name}</span>
               )}
 
               <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 bg-sci-panel/90 backdrop-blur rounded px-1 ml-auto shrink-0 shadow-lg border border-sci-cyan/20">
@@ -120,9 +120,9 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
               server.status === 'error' ? 'text-sci-red' :
               'text-sci-dim opacity-40'
             }/>
-            <div className="flex-1 min-w-0">
+            <div className={`flex-1 min-w-0 ${width < 180 ? 'hidden' : ''}`}>
                <div className="text-[11px] font-sci font-bold truncate leading-tight tracking-wider">{server.name}</div>
-               <div className="text-[9px] font-sci opacity-40 truncate leading-tight tracking-tighter">{server.ip}</div>
+               <div className={`text-[9px] font-sci opacity-40 truncate leading-tight tracking-tighter ${width < 220 ? 'hidden' : ''}`}>{server.ip}</div>
             </div>
             
             <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 ml-auto shrink-0 bg-sci-panel/90 backdrop-blur rounded px-1 shadow-lg border border-sci-cyan/20">
@@ -150,11 +150,11 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
           <div className="p-1.5 bg-sci-cyan/10 border border-sci-cyan/30 text-sci-cyan rounded-sm">
             <ServerIcon size={16} className="animate-pulse" />
           </div>
-          <div>
+          <div className={width < 200 ? 'hidden' : ''}>
             <h2 className="text-sm font-sci font-bold text-sci-text uppercase tracking-widest">方块 AI 助手</h2>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="flex h-1.5 w-1.5 rounded-full bg-sci-cyan animate-pulse"></span>
-              <span className="text-[9px] text-sci-cyan/40 uppercase tracking-tighter font-bold font-sci">网络上行活跃</span>
+              <span className="text-[9px] text-sci-cyan/40 uppercase tracking-tighter font-bold font-sci hidden sm:block">网络上行活跃</span>
             </div>
           </div>
         </div>
@@ -217,7 +217,7 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
            <span className="w-1.5 h-1.5 rounded-full bg-sci-green shadow-[0_0_5px_#22c55e]"></span>
            神经核心就绪
          </div>
-         <div className="text-[9px] text-sci-cyan/20 font-sci tracking-tighter uppercase font-bold">
+         <div className={`text-[9px] text-sci-cyan/20 font-sci tracking-tighter uppercase font-bold ${width < 220 ? 'hidden' : ''}`}>
            V2.5.4_上行链路
          </div>
       </div>

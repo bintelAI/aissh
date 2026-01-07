@@ -22,61 +22,54 @@ fn main() {
       writeln!(log_file, "--- Sidecar starting ---").unwrap();
 
       #[cfg(windows)]
-      let sidecar_result = app.shell().sidecar("back-rust")
-          .args(["--windows-hide"]); // 这里虽然 sidecar 本身不一定处理这个 flag，但主要通过下方的 spawn 逻辑控制
+      let sidecar_result = app.shell().sidecar("back-rust")?.args(["--windows-hide"]);
       
       #[cfg(not(windows))]
-      let sidecar_result = app.shell().sidecar("back-rust");
+      let sidecar_result = app.shell().sidecar("back-rust")?;
       
-      match sidecar_result {
-        Ok(mut sidecar) => {
-          // 在 Windows 上隐藏控制台窗口
-          #[cfg(windows)]
-          {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-            sidecar = sidecar.creation_flags(CREATE_NO_WINDOW);
-          }
+      let mut sidecar = sidecar_result;
 
-          match sidecar.spawn() {
-            Ok((mut rx, child)) => {
-              // 将 child 存入状态中，以便后续关闭
-              let child_arc = Arc::new(Mutex::new(Some(child)));
-              app.manage(SidecarState(child_arc.clone()));
+      // 在 Windows 上隐藏控制台窗口
+      #[cfg(windows)]
+      {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        sidecar = sidecar.creation_flags(CREATE_NO_WINDOW);
+      }
 
-              tauri::async_runtime::spawn(async move {
-                while let Some(event) = rx.recv().await {
-                  match event {
-                    CommandEvent::Stdout(line) => {
-                      if let Ok(s) = String::from_utf8(line) {
-                        print!("[back-rust] {}", s);
-                        if let Ok(mut f) = OpenOptions::new().append(true).open(&log_path) {
-                          let _ = writeln!(f, "STDOUT: {}", s);
-                        }
-                      }
+      match sidecar.spawn() {
+        Ok((mut rx, child)) => {
+          // 将 child 存入状态中，以便后续关闭
+          let child_arc = Arc::new(Mutex::new(Some(child)));
+          app.manage(SidecarState(child_arc.clone()));
+
+          tauri::async_runtime::spawn(async move {
+            while let Some(event) = rx.recv().await {
+              match event {
+                CommandEvent::Stdout(line) => {
+                  if let Ok(s) = String::from_utf8(line) {
+                    print!("[back-rust] {}", s);
+                    if let Ok(mut f) = OpenOptions::new().append(true).open(&log_path) {
+                      let _ = writeln!(f, "STDOUT: {}", s);
                     }
-                    CommandEvent::Stderr(line) => {
-                      if let Ok(s) = String::from_utf8(line) {
-                        eprint!("[back-rust] {}", s);
-                        if let Ok(mut f) = OpenOptions::new().append(true).open(&log_path) {
-                          let _ = writeln!(f, "STDERR: {}", s);
-                        }
-                      }
-                    }
-                    _ => {}
                   }
                 }
-              });
-            },
-            Err(e) => {
-              eprintln!("Failed to spawn sidecar: {}", e);
-              let _ = writeln!(log_file, "SPAWN ERROR: {}", e);
+                CommandEvent::Stderr(line) => {
+                  if let Ok(s) = String::from_utf8(line) {
+                    eprint!("[back-rust] {}", s);
+                    if let Ok(mut f) = OpenOptions::new().append(true).open(&log_path) {
+                      let _ = writeln!(f, "STDERR: {}", s);
+                    }
+                  }
+                }
+                _ => {}
+              }
             }
-          }
+          });
         },
         Err(e) => {
-          eprintln!("Failed to find sidecar: {}", e);
-          let _ = writeln!(log_file, "FIND ERROR: {}", e);
+          eprintln!("Failed to spawn sidecar: {}", e);
+          let _ = writeln!(log_file, "SPAWN ERROR: {}", e);
         }
       }
       Ok(())

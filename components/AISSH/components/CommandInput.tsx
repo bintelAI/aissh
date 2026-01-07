@@ -174,32 +174,38 @@ export const CommandInput: React.FC<CommandInputProps> = ({ onInsertCommand }) =
     <>
       <form onSubmit={handleExecuteCommand}>
         <CyberPanel variant="obsidian" className="p-2 border-t border-white/10 flex items-center gap-3 flex-shrink-0 shadow-2xl select-none">
-          <div className="flex items-center gap-0 shrink-0 bg-black/40 border border-white/10 group relative">
-            <select 
-              value={operationMode} 
-              onChange={(e) => setOperationMode(e.target.value as any)}
-              className="appearance-none bg-transparent pl-3 pr-8 py-1.5 text-[10px] font-bold uppercase tracking-widest text-sci-cyan outline-none cursor-pointer z-10"
-            >
-              <option value="single">单个操作</option>
-              <option value="batch">批量分发</option>
-              <option value="compare">批量对比</option>
-            </select>
-            <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-sci-cyan/50 pointer-events-none group-hover:text-sci-cyan transition-colors" />
+          <div className="flex items-center gap-0 shrink-0 relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-sci-cyan/10 to-transparent rounded opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="relative flex items-center bg-black/80 border border-white/20 px-3 py-1.5 group hover:border-sci-cyan/50 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all duration-300">
+              <select 
+                value={operationMode} 
+                onChange={(e) => setOperationMode(e.target.value as any)}
+                className="appearance-none bg-transparent pl-0 pr-7 py-0 text-[11px] font-bold uppercase tracking-widest text-sci-cyan outline-none cursor-pointer z-10 hover:text-sci-cyan/90 transition-colors"
+              >
+                <option value="single">单个操作</option>
+                <option value="batch">批量分发</option>
+                <option value="compare">批量对比</option>
+              </select>
+              <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-sci-cyan/60 pointer-events-none group-hover:text-sci-cyan group-hover:rotate-180 transition-all duration-300" />
+            </div>
           </div>
 
 
-          <div className="flex items-center gap-1 shrink-0 bg-black/40 border border-white/10 px-2 py-1 relative">
-            <span className="text-[10px] text-white/40 uppercase tracking-widest">类型</span>
-            <select
-              value={selectedProfileId || ''}
-              onChange={(e) => selectProfile(e.target.value)}
-              className="appearance-none bg-transparent pl-2 pr-6 py-1 text-[10px] font-bold uppercase tracking-widest text-sci-violet outline-none cursor-pointer z-10"
-            >
-              {profiles.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-sci-violet/50 pointer-events-none" />
+          <div className="flex items-center gap-1 relative min-w-[120px]">
+            <div className="absolute inset-0 bg-gradient-to-r from-sci-violet/10 to-transparent rounded opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="relative flex items-center bg-black/80 border border-white/20 px-2 py-1 group hover:border-sci-violet/50 hover:shadow-[0_0_15px_rgba(139,92,246,0.3)] transition-all duration-300">
+              <span className="text-[10px] text-white/40 uppercase tracking-widest shrink-0 group-hover:text-sci-violet/70 transition-colors">类型</span>
+              <select
+                value={selectedProfileId || ''}
+                onChange={(e) => selectProfile(e.target.value)}
+                className="appearance-none bg-transparent pl-2 pr-6 py-1 text-[10px] font-bold uppercase tracking-widest text-sci-violet outline-none cursor-pointer z-10 min-w-0 flex-1 hover:text-sci-violet/90 transition-colors"
+              >
+                {profiles.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-sci-violet/60 pointer-events-none group-hover:text-sci-violet group-hover:rotate-180 transition-all duration-300" />
+            </div>
           </div>
 
           <div className="relative flex-1 group">
@@ -296,16 +302,6 @@ export const CommandInput: React.FC<CommandInputProps> = ({ onInsertCommand }) =
                >
                  <BookOpen size={12}/> 
                  <span className="text-[10px] font-bold uppercase">模板</span>
-               </button>
-               <button 
-                 type="button" 
-                 onClick={handleAITranslate} 
-                 disabled={isAIProcessing} 
-                 className="flex items-center gap-1 hover:text-sci-violet transition-colors text-sci-dim"
-                 title="AI 意图转命令"
-               >
-                 {isAIProcessing ? <Loader2 size={12} className="animate-spin text-sci-cyan"/> : <Sparkles size={12}/>} 
-                 <span className="text-[10px] font-bold uppercase">AI 同步</span>
                </button>
              </div>
 

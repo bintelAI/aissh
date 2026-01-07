@@ -153,6 +153,7 @@ const AISSH: React.FC = () => {
       {/* Sidebar Area */}
       <div style={{ width: leftWidth }} className="flex-shrink-0 select-none bg-sci-obsidian/40 backdrop-blur-md border-r border-white/5 relative z-10">
         <ServerTree 
+          width={leftWidth}
           servers={servers} 
           folders={folders} 
           activeServerId={activeSessionId} 
