@@ -10,14 +10,16 @@
     "preview": "vite preview",
     "tauri:dev": "node scripts/prepare-tauri-sidecar.mjs debug && tauri dev",
     "tauri:build": "node scripts/prepare-tauri-sidecar.mjs release && tauri build || (echo \"DMG 打包脚本失败，但 .app 与临时 dmg 已生成，见 src-tauri/target/release/bundle/macos\" && exit 0)",
-    "build:back": "cd back && pnpm install && pnpm run build && ../node_modules/.bin/ncc build src/main.ts -o dist/bundle -m",
+    "build:back": "cd back && pnpm run build && npx ncc build src/main.ts -o dist/bundle -m --no-cache --minify && node -e \"const fs=require('fs');const s='dist/bundle/index.js';const d='dist/bundle/index.cjs';if(fs.existsSync(s)){if(fs.existsSync(d))fs.unlinkSync(d);fs.renameSync(s,d)}\"",
     "electron:dev": "npm run build:back && concurrently \"vite --config vite.config.electron.ts\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build": "npm run build:back && vite build --config vite.config.electron.ts && electron-builder",
-    "electron:build:mac": "npm run electron:build -- --mac --arm64",
+    "electron:build:mac": "npm run electron:build -- --mac --universal",
     "electron:build:win": "npm run electron:build -- --win --x64",
+    "electron:build:win7": "npm run build:back && vite build --config vite.config.electron.ts && electron-builder --win --x64 -c.electronVersion=22.3.27 -c.artifactName=\"${productName}-Win7-${version}-${arch}.${ext}\"",
     "electron:build:linux": "npm run electron:build -- --linux"
   },
-  "dependencies": {
+  "dependencies": {},
+  "devDependencies": {
     "@tauri-apps/api": "^2.0.0",
     "electron-is-dev": "^3.0.1",
     "i18next": "^25.7.3",
@@ -40,9 +42,7 @@
     "xterm-addon-search": "^0.13.0",
     "xterm-addon-web-links": "^0.9.0",
     "xterm-addon-webgl": "^0.16.0",
-    "zustand": "^5.0.9"
-  },
-  "devDependencies": {
+    "zustand": "^5.0.9",
     "@tauri-apps/cli": "^2.0.0",
     "@types/node": "^22.14.0",
     "@vercel/ncc": "^0.38.4",
@@ -57,38 +57,86 @@
     "tailwindcss": "^3.4.19",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
+    "vite-plugin-compression": "^0.5.1",
+    "vite-plugin-monaco-editor": "^1.1.0",
     "wait-on": "^9.0.3"
   },
   "build": {
     "appId": "com.gemini.ssh.assistant",
-    "productName": "Gemini SSH",
+    "productName": "方块SSH助手",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "!dist/**/*.map",
+      "!dist/**/*.gz",
+      "!dist/**/*.br"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/node-pty/**/*"
     ],
     "extraResources": [
       {
         "from": "back/dist/bundle",
         "to": "backend",
         "filter": [
-          "**/*"
+          "index.cjs",
+          "!**/*.d.ts",
+          "!**/*.map",
+          "!client-dist",
+          "!pagent.exe",
+          "!index1.js"
         ]
       }
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": [
-        "dmg",
-        "zip"
-      ]
+        "dmg"
+      ],
+      "minimumSystemVersion": "10.15",
+      "extendInfo": {
+        "LSMinimumSystemVersion": "10.15"
+      },
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    },
+    "compression": "maximum",
+    "removePackageScripts": true,
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false,
     "win": {
       "target": [
-        "nsis"
-      ]
+        "nsis",
+        "portable"
+      ],
+      "legalTrademarks": "BinterAI"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": true,
+      "differentialPackage": false
     },
     "linux": {
       "target": [

@@ -18,6 +18,10 @@ jobs:
         platform: [macos-latest, windows-latest]
 
     runs-on: ${{ matrix.platform }}
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - uses: actions/checkout@v4
 
@@ -33,38 +37,41 @@ jobs:
           node-version: 20
           cache: 'pnpm'
 
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || (matrix.platform == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'x86_64-unknown-linux-gnu') }}
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            src-tauri
-            back-rust
-
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libayatana-appindicator3-dev librsvg2-dev patchelf
-
-      - name: install frontend dependencies
+      - name: install dependencies
         run: pnpm install
 
-      - name: build sidecar
-        run: node scripts/prepare-tauri-sidecar.mjs release
+      - name: install backend dependencies
+        run: |
+          cd back
+          pnpm install
 
-      - name: build sidecar and app
-        uses: tauri-apps/tauri-action@v0
+      - name: build backend
+        run: pnpm run build:back
+
+      - name: build app (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: pnpm run electron:build:mac
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: build app (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: |
+          pnpm run electron:build:win
+          pnpm run electron:build:win7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          tagName: v__VERSION__ # tauri-action replaces this with app version
-          releaseName: "Gemini SSH v__VERSION__"
-          releaseBody: "Automated release from GitHub Actions."
-          releaseDraft: true
+          files: |
+            release/*.exe
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+          draft: true
           prerelease: false
-          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

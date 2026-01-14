@@ -26,16 +26,40 @@ class SSHConnection {
     
     let socketUrl;
     if (isElectron || isTauri) {
+        // Electron 环境下先设置一个默认值，稍后通过异步方法更新
         socketUrl = 'http://localhost:3001';
     } else {
         socketUrl = import.meta.env.PROD ? '/' : 'http://localhost:3001';
     }
 
-    console.log(`Initializing SSH Connection. Environment: ${isElectron ? 'Electron' : isTauri ? 'Tauri' : 'Web'}, Socket URL: ${socketUrl}`);
+    console.log(`Initializing SSH Connection. Environment: ${isElectron ? 'Electron' : isTauri ? 'Tauri' : 'Web'}, Initial Socket URL: ${socketUrl}`);
 
     this.socket = io(socketUrl, {
       autoConnect: false,
     });
+
+    // 如果是 Electron 环境，异步获取真实端口并重定向 socket
+    if (isElectron) {
+      // @ts-ignore
+      window.electron.getBackendPort().then((port: number) => {
+        const dynamicUrl = `http://localhost:${port}`;
+        console.log(`[SSHService] Electron Backend Port Received: ${port}, Target URL: ${dynamicUrl}`);
+        if (this.socket) {
+          // @ts-ignore
+          const manager = (this.socket as any).io;
+          if (manager.uri !== dynamicUrl) {
+            console.log(`[SSHService] Updating Socket URI from ${manager.uri} to ${dynamicUrl}`);
+            manager.uri = dynamicUrl;
+            // 如果已经连接了错误的地址，强制断开
+            if (this.socket.connected) {
+              this.socket.disconnect();
+            }
+          }
+        }
+      }).catch((err: any) => {
+        console.error('[SSHService] Failed to get backend port:', err);
+      });
+    }
 
     this.socket.on('connect_error', (err) => {
       console.error('Socket connection error:', err);
@@ -86,14 +110,51 @@ class SSHConnection {
   }
 
   connect(ip: string, username: string, password: string, serverId: string) {
-    if (!this.socket?.connected) {
-      this.socket?.connect();
+    console.log(`[SSHService] Connect request for ${ip} (ServerID: ${serverId})`);
+    
+    // 确保在连接前，socket 的 URL 已经更新为正确的随机端口
+    const attemptConnect = (port: number | null = null) => {
+      if (this.socket) {
+        // @ts-ignore
+        const manager = (this.socket as any).io;
+        if (port) {
+          const dynamicUrl = `http://localhost:${port}`;
+          if (manager.uri !== dynamicUrl) {
+            console.log(`[SSHService] connect() - Force updating URI to: ${dynamicUrl}`);
+            manager.uri = dynamicUrl;
+            if (this.socket.connected) this.socket.disconnect();
+          }
+        }
+        
+        console.log(`[SSHService] Final socket target: ${manager.uri}`);
+        if (!this.socket.connected) {
+          console.log('[SSHService] Socket not connected, calling connect()...');
+          this.socket.connect();
+        }
+      }
+
+      // 在终端显示连接中状态，使用青色
+      this.dataListeners.forEach(cb => cb(`\r\n\x1b[36m[Status] Connecting to ${ip}...\x1b[0m\r\n`, serverId));
+
+      console.log('[SSHService] Emitting ssh-connect event');
+      this.socket?.emit('ssh-connect', { ip, username, password, serverId });
+    };
+
+    // @ts-ignore
+    const isElectron = typeof window !== 'undefined' && window.electron?.isElectron;
+    if (isElectron) {
+        console.log('[SSHService] Electron environment detected, fetching port...');
+        // @ts-ignore
+        window.electron.getBackendPort().then((port: number) => {
+            console.log(`[SSHService] connect() - Received port: ${port}`);
+            attemptConnect(port);
+        }).catch((err: any) => {
+            console.error('[SSHService] connect() - Failed to get port, using default:', err);
+            attemptConnect();
+        });
+    } else {
+        attemptConnect();
     }
-
-    // 在终端显示连接中状态，使用青色
-    this.dataListeners.forEach(cb => cb(`\r\n\x1b[36m[Status] Connecting to ${ip}...\x1b[0m\r\n`, serverId));
-
-    this.socket?.emit('ssh-connect', { ip, username, password, serverId });
     
     return new Promise((resolve) => {
        resolve(true); 

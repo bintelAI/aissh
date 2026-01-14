@@ -1,10 +1,42 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { fork } = require('child_process');
 
 let mainWindow;
 let serverProcess;
+let backendPort = null;
+let resolveBackendPort;
+const backendPortPromise = new Promise((resolve) => {
+  resolveBackendPort = resolve;
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Main] Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Main] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+ipcMain.handle('get-backend-port', async () => {
+  console.log('[Main] get-backend-port requested');
+  if (backendPort !== null) {
+    return backendPort;
+  }
+  
+  // Create a timeout promise
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Backend port request timed out')), 10000);
+  });
+
+  try {
+    return await Promise.race([backendPortPromise, timeoutPromise]);
+  } catch (err) {
+    console.error('[Main] Failed to get backend port:', err);
+    return 3001; // Fallback to default
+  }
+});
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -41,36 +73,73 @@ function startBackend() {
   
   if (app.isPackaged) {
     // In production, backend is bundled in extraResources
-    backendDist = path.join(process.resourcesPath, 'backend/index.js');
+    // Note: On Mac, process.resourcesPath is usually Contents/Resources
+    backendDist = path.join(process.resourcesPath, 'backend', 'index.cjs');
   } else {
     // In development
     backendDist = path.join(__dirname, '../back/dist/main.js');
   }
   
-  console.log('Backend dist path:', backendDist);
+  console.log('[Main] Backend dist path:', backendDist);
   
   // Check if backend dist exists
   if (!fs.existsSync(backendDist)) {
-    console.error('Backend dist not found at:', backendDist);
-    // In ASAR, fs.existsSync might work differently, but Electron handles it
+    console.error('[Main] Backend dist not found at:', backendDist);
+    // Try alternative path if packaged
+    if (app.isPackaged) {
+        const altPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'backend', 'index.cjs');
+        console.log('[Main] Checking alternative path:', altPath);
+        if (fs.existsSync(altPath)) {
+            backendDist = altPath;
+        }
+    }
   }
 
-  console.log('Starting backend process...');
+  console.log('[Main] Starting backend process...');
   try {
-    const backendRoot = path.dirname(path.dirname(backendDist));
+    const backendRoot = path.dirname(backendDist);
+    
+    // Check file stats
+    try {
+        const stats = fs.statSync(backendDist);
+        console.log(`[Main] Backend file size: ${stats.size} bytes`);
+    } catch (e) {
+        console.error(`[Main] Error reading backend file stats: ${e.message}`);
+    }
+
     serverProcess = fork(backendDist, [], {
       cwd: backendRoot,
       env: { 
         ...process.env, 
-        PORT: '3001',
+        PORT: app.isPackaged ? '0' : '3001', // Use 0 for random port in production
         NODE_ENV: app.isPackaged ? 'production' : 'development'
       },
-      stdio: 'inherit'
+      stdio: ['inherit', 'pipe', 'pipe', 'ipc'] // Capture stdout/stderr
     });
 
-    serverProcess.on('message', (msg) => {
-      console.log('Backend message:', msg);
-    });
+    if (serverProcess.stdout) {
+      serverProcess.stdout.on('data', (data) => {
+        console.log(`[Backend STDOUT] ${data}`);
+      });
+    }
+
+    if (serverProcess.stderr) {
+      serverProcess.stderr.on('data', (data) => {
+        console.error(`[Backend STDERR] ${data}`);
+      });
+    }
+
+  serverProcess.on('message', (msg) => {
+    console.log('[Main] Backend message:', msg);
+    if (msg && msg.type === 'server-port') {
+      backendPort = msg.port;
+      if (resolveBackendPort) {
+        resolveBackendPort(msg.port);
+        resolveBackendPort = null; // Only resolve once
+      }
+      console.log(`[Main] Backend is now running on port: ${backendPort}`);
+    }
+  });
     
     serverProcess.on('error', (err) => {
       console.error('Backend process error:', err);
