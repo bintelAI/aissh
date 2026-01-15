@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, PlusCircle, Trash2 } from 'lucide-react';
 import { usePromptStore } from '../store/usePromptStore';
+import { CyberSelect } from '../common/CyberSelect';
 
 interface PromptConfigModalProps {
   onClose: () => void;
@@ -203,17 +204,15 @@ export const PromptConfigModal: React.FC<PromptConfigModalProps> = ({ onClose })
                       placeholder="高亮正则或关键词"
                       className="bg-black/60 border border-white/10 text-sci-text px-2 py-1 text-[12px] clip-corner"
                     />
-                    <select
-                      value={r.color}
-                      onChange={(e) => updateRule(selected!.id, r.id, { color: e.target.value })}
-                      className="bg-black/60 border border-white/10 text-sci-text px-2 py-1 text-[12px] clip-corner appearance-none"
-                    >
-                      {colorOptions.map((c) => (
-                        <option key={c.value} value={c.value}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex-shrink-0">
+                      <CyberSelect
+                        value={r.color}
+                        onChange={(val) => updateRule(selected!.id, r.id, { color: val })}
+                        options={colorOptions}
+                        variant="cyan"
+                        width="150px"
+                      />
+                    </div>
                     <input
                       value={r.remark || ''}
                       onChange={(e) => updateRule(selected!.id, r.id, { remark: e.target.value })}

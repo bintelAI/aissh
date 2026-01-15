@@ -1,3 +1,7 @@
+
+
+
+
 # 🌌 Gemini SSH 助手 (Project Gemini)
 
 **集成 AI 的赛博朋克风格现代化 Web SSH 客户端**
@@ -108,3 +112,7 @@ pnpm run electron:dev
 
 ## 📄 开源协议
 [MIT License](LICENSE)
+
+
+方块智联AI 团队开发 
+[https://www.binterai.com/](https://www.binterai.com/)

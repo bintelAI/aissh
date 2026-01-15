@@ -83,7 +83,7 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
               exit={{ opacity: 0, x: -10 }}
               transition={{ duration: 0.2 }}
               draggable
-              onDragStart={(e) => {
+              onDragStart={(e: React.DragEvent) => {
                 e.stopPropagation();
                 e.dataTransfer.setData('move_data', JSON.stringify({ type: 'folder', id: folder.id }));
               }}
@@ -158,7 +158,7 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
               exit={{ opacity: 0, x: -10 }}
               transition={{ duration: 0.2 }}
               draggable
-              onDragStart={(e) => {
+              onDragStart={(e: React.DragEvent) => {
                 e.stopPropagation();
                 e.dataTransfer.setData('move_data', JSON.stringify({ type: 'server', id: server.id }));
               }}
@@ -204,10 +204,51 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-black/20 via-sci-obsidian/40 to-black/60 backdrop-blur-md border-r border-sci-cyan/10 relative overflow-hidden">
-      {/* 装饰性背景网格 */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
-      <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-sci-cyan/5 to-transparent pointer-events-none"></div>
+    <div className="flex flex-col h-full bg-gradient-to-b from-black/40 via-sci-obsidian/60 to-black/80 backdrop-blur-xl border-r border-sci-cyan/20 relative overflow-hidden group/sidebar">
+      {/* 装饰性背景网格 - 增强可见度 */}
+      <div 
+        className="absolute inset-0 bg-[linear-gradient(rgba(0,243,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(0,243,255,0.05)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none opacity-40"
+        style={{
+          animation: 'grid-subtle-move 40s linear infinite',
+        }}
+      ></div>
+
+      {/* 动态背景光晕 - 显著增强颜色和模糊度 */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-[5%] -left-[10%] w-[60%] h-[40%] bg-sci-cyan/15 blur-[100px] rounded-full animate-pulse-slow"></div>
+        <div className="absolute top-[30%] -right-[15%] w-[50%] h-[40%] bg-sci-violet/15 blur-[90px] rounded-full animate-pulse-slow delay-1000"></div>
+        <div className="absolute -bottom-[5%] left-[10%] w-[70%] h-[40%] bg-sci-cyan/15 blur-[110px] rounded-full animate-pulse-slow delay-500"></div>
+      </div>
+
+      {/* 增强版扫描线效果 - 带有明显的辉光 */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.1] group-hover/sidebar:opacity-[0.15] transition-opacity duration-700">
+        <div className="w-full h-[2px] bg-sci-cyan shadow-[0_0_15px_#00f3ff,0_0_30px_#00f3ff] animate-scanline-fast"></div>
+        <div className="w-full h-[150px] bg-gradient-to-b from-sci-cyan/20 to-transparent animate-scanline-fast -translate-y-[150px]"></div>
+      </div>
+
+      {/* 顶部渐变遮罩 */}
+      <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-sci-cyan/10 via-sci-cyan/5 to-transparent pointer-events-none z-0"></div>
+
+      <style>{`
+        @keyframes grid-subtle-move {
+          0% { background-position: 0 0; }
+          100% { background-position: 32px 32px; }
+        }
+        @keyframes scanline-fast {
+          0% { transform: translateY(-200%); }
+          100% { transform: translateY(800%); }
+        }
+        @keyframes pulse-slow {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50% { opacity: 0.6; transform: scale(1.1); }
+        }
+        .animate-scanline-fast {
+          animation: scanline-fast 6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .animate-pulse-slow {
+          animation: pulse-slow 4s ease-in-out infinite;
+        }
+      `}</style>
 
       {/* Header */}
       <div 

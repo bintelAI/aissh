@@ -19,6 +19,7 @@ import { sshManager } from '../services/sshService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AnimatedText, GlitchText } from '../common/AnimatedText';
 import { AIEmptyState } from './AIEmptyState';
+import { CyberSelect } from '../common/CyberSelect';
 
 interface AIChatPanelProps {
   logs: LogEntry[];
@@ -132,6 +133,11 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
   };
 
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
+  const profileOptions = profiles.map(p => ({ value: p.id, label: p.name }));
+  const modelOptions = [
+    { value: 'gemini-3-pro-preview', label: '量子核心 (高智能)' },
+    { value: 'gemini-3-flash-preview', label: '神经闪速 (高速度)' },
+  ];
 
   const createNewSession = (serverId: string) => {
     const newId = Date.now().toString();
@@ -821,22 +827,17 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
             </div>
 
             <div className="flex items-center gap-1">
-              <div className="group relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-sci-violet/10 to-transparent rounded opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div className="relative flex items-center bg-black/80 border border-white/20 px-2 py-1 group hover:border-sci-violet/50 hover:shadow-[0_0_15px_rgba(139,92,246,0.3)] transition-all duration-300">
-                    {containerWidth > 520 && <span className="text-[10px] text-white/40 uppercase tracking-widest mr-1 group-hover:text-sci-violet/70 transition-colors">类型</span>}
-                  <select
-                    value={selectedProfileId || ''}
-                    onChange={(e) => selectProfile(e.target.value)}
-                    className={`appearance-none bg-transparent pl-1 pr-5 py-1 text-[10px] font-bold uppercase tracking-widest text-sci-violet outline-none cursor-pointer hover:text-sci-violet/90 transition-colors ${containerWidth <= 520 ? 'w-24' : ''}`}
-                  >
-                    {profiles.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={10} className="ml-[-18px] text-sci-violet/60 pointer-events-none group-hover:text-sci-violet group-hover:rotate-180 transition-all duration-300" />
-                </div>
-              </div>
+              <div className="group">
+                 <CyberSelect 
+                   value={selectedProfileId || ''} 
+                   onChange={(val) => selectProfile(val)}
+                   options={profileOptions}
+                   variant="violet"
+                   label={containerWidth > 520 ? "类型" : undefined}
+                   width={containerWidth <= 520 ? '120px' : 'auto'}
+                   direction="up"
+                 />
+               </div>
               <div className="group relative">
                 <button 
                   onClick={handleClearSession} 
@@ -1019,14 +1020,13 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
                 </div>
 
                 {!agentConfig.useCustomModel ? (
-                  <select 
+                  <CyberSelect 
                     value={agentConfig.model} 
-                    onChange={e => setAgentConfig({...agentConfig, model: e.target.value as any})}
-                    className="w-full bg-black/40 border border-white/10 text-sci-text px-3 py-2 text-xs font-sci focus:border-sci-cyan/30 outline-none transition-all clip-corner appearance-none"
-                  >
-                    <option value="gemini-3-pro-preview">量子核心 (高智能)</option>
-                    <option value="gemini-3-flash-preview">神经闪速 (高速度)</option>
-                  </select>
+                    onChange={val => setAgentConfig({...agentConfig, model: val as any})}
+                    options={modelOptions}
+                    variant="cyan"
+                    width="100%"
+                  />
                 ) : (
                   <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="grid grid-cols-2 gap-2 mb-2">

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Command, Terminal as TerminalIcon, ChevronDown, Send, Brain, Sparkles, Loader2, X, AlertTriangle, Info, BookOpen, Save, ArrowRightLeft } from 'lucide-react';
 import { CyberPanel } from '../common/CyberPanel';
+import { CyberSelect } from '../common/CyberSelect';
 import { useSSHStore } from '../store/useSSHStore';
 import { AIServiceFactory } from '../services/aiServiceFactory';
 import { SingleExecutionStrategy, BatchExecutionStrategy, BatchCompareStrategy, CommandExecutor } from '../services/commandStrategy';
@@ -28,6 +29,14 @@ export const CommandInput: React.FC<CommandInputProps> = ({ onInsertCommand }) =
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const executor = useRef(new CommandExecutor(new SingleExecutionStrategy()));
+
+  const operationModeOptions = [
+    { value: 'single', label: '单个操作' },
+    { value: 'batch', label: '批量分发' },
+    { value: 'compare', label: '批量对比' },
+  ];
+
+  const profileOptions = profiles.map(p => ({ value: p.id, label: p.name }));
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowUp') {
@@ -174,41 +183,30 @@ export const CommandInput: React.FC<CommandInputProps> = ({ onInsertCommand }) =
 
   return (
     <>
-      <form onSubmit={handleExecuteCommand}>
-        <CyberPanel variant="obsidian" className="p-2 border-t border-white/10 flex items-center gap-3 flex-shrink-0 shadow-2xl select-none">
-          <div className="flex items-center gap-0 shrink-0 relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-sci-cyan/10 to-transparent rounded opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative flex items-center bg-black/80 border border-white/20 px-3 py-1.5 group hover:border-sci-cyan/50 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all duration-300">
-              <select 
-                value={operationMode} 
-                onChange={(e) => setOperationMode(e.target.value as any)}
-                className="appearance-none bg-transparent pl-0 pr-7 py-0 text-[11px] font-bold uppercase tracking-widest text-sci-cyan outline-none cursor-pointer z-10 hover:text-sci-cyan/90 transition-colors"
-              >
-                <option value="single">单个操作</option>
-                <option value="batch">批量分发</option>
-                <option value="compare">批量对比</option>
-              </select>
-              <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-sci-cyan/60 pointer-events-none group-hover:text-sci-cyan group-hover:rotate-180 transition-all duration-300" />
-            </div>
-          </div>
+      <form onSubmit={handleExecuteCommand} className="relative z-[60]">
+        <CyberPanel variant="obsidian" className="p-2 border-t border-white/10 flex items-center gap-3 flex-shrink-0 shadow-2xl">
+          <div className="flex items-center gap-0 shrink-0">
+             <CyberSelect 
+               value={operationMode} 
+               onChange={(val) => setOperationMode(val as any)}
+               options={operationModeOptions}
+               variant="cyan"
+               direction="up"
+             />
+           </div>
 
 
-          <div className="flex items-center gap-1 relative min-w-[120px]">
-            <div className="absolute inset-0 bg-gradient-to-r from-sci-violet/10 to-transparent rounded opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative flex items-center bg-black/80 border border-white/20 px-2 py-1 group hover:border-sci-violet/50 hover:shadow-[0_0_15px_rgba(139,92,246,0.3)] transition-all duration-300">
-              <span className="text-[10px] text-white/40 uppercase tracking-widest shrink-0 group-hover:text-sci-violet/70 transition-colors">类型</span>
-              <select
-                value={selectedProfileId || ''}
-                onChange={(e) => selectProfile(e.target.value)}
-                className="appearance-none bg-transparent pl-2 pr-6 py-1 text-[10px] font-bold uppercase tracking-widest text-sci-violet outline-none cursor-pointer z-10 min-w-0 flex-1 hover:text-sci-violet/90 transition-colors"
-              >
-                {profiles.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-              <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-sci-violet/60 pointer-events-none group-hover:text-sci-violet group-hover:rotate-180 transition-all duration-300" />
-            </div>
-          </div>
+           <div className="flex items-center gap-1 min-w-[120px]">
+             <CyberSelect 
+               value={selectedProfileId || ''} 
+               onChange={(val) => selectProfile(val)}
+               options={profileOptions}
+               variant="violet"
+               label="类型"
+               width="100%"
+               direction="up"
+             />
+           </div>
 
           <div className="relative flex-1 group">
              <input 
