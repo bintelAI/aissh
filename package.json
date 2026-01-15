@@ -1,7 +1,7 @@
 {
   "name": "bintelai-ssh-assistant",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -15,7 +15,7 @@
     "electron:build": "npm run build:back && vite build --config vite.config.electron.ts && electron-builder",
     "electron:build:mac": "npm run electron:build -- --mac --universal",
     "electron:build:win": "npm run electron:build -- --win --x64",
-    "electron:build:win7": "npm run build:back && vite build --config vite.config.electron.ts && electron-builder --win --x64 -c.electronVersion=22.3.27 -c.artifactName=\"${productName}-Win7-${version}-${arch}.${ext}\"",
+    "electron:build:win7": "npm run build:back && vite build --config vite.config.electron.ts && electron-builder --win --x64 -c.electronVersion=22.3.27 -c.artifactName=\"${productName}-Win7-${version}-${arch}.exe\"",
     "electron:build:linux": "npm run electron:build -- --linux"
   },
   "dependencies": {

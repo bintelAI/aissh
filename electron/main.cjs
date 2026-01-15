@@ -1,9 +1,10 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { fork } = require('child_process');
 
 let mainWindow;
+let splashWindow;
 let serverProcess;
 let backendPort = null;
 let resolveBackendPort;
@@ -38,10 +39,31 @@ ipcMain.handle('get-backend-port', async () => {
   }
 });
 
+function createSplashWindow() {
+  splashWindow = new BrowserWindow({
+    width: 400,
+    height: 400,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+
+  splashWindow.loadFile(path.join(__dirname, 'splash.html'));
+  
+  splashWindow.on('closed', () => {
+    splashWindow = null;
+  });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    show: false, // Start hidden
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -49,12 +71,16 @@ function createWindow() {
     },
     titleBarStyle: 'hiddenInset', // Mac style
     backgroundColor: '#000000',
+    autoHideMenuBar: true, // Hide menu bar on Windows/Linux
   });
+
+  mainWindow.setMenu(null); // Double insurance for Windows/Linux
+  mainWindow.removeMenu(); // Remove menu for this window (Windows/Linux)
 
   if (!app.isPackaged) {
     // In dev, we wait for Vite to serve
     mainWindow.loadURL('http://localhost:3000');
-    mainWindow.webContents.openDevTools();
+    // mainWindow.webContents.openDevTools(); // Optional: open later
   } else {
     // In prod, we load the index.html
     const indexPath = path.join(__dirname, '../dist/index.html');
@@ -63,9 +89,23 @@ function createWindow() {
     });
   }
 
+  // Show main window and close splash when ready
+  mainWindow.once('ready-to-show', () => {
+    if (splashWindow) {
+      splashWindow.close();
+    }
+    mainWindow.show();
+    if (!app.isPackaged) {
+      mainWindow.webContents.openDevTools();
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // Force menu removal again after window is created
+  Menu.setApplicationMenu(Menu.buildFromTemplate([]));
 }
 
 function startBackend() {
@@ -154,6 +194,10 @@ function startBackend() {
 }
 
 app.whenReady().then(() => {
+  createSplashWindow(); // Show splash first
+  const emptyMenu = Menu.buildFromTemplate([]);
+  Menu.setApplicationMenu(emptyMenu); // Using an empty template to remove all standard menus like File, Edit, etc.
+  
   startBackend();
   createWindow();
 
