@@ -3,6 +3,7 @@ import { ChatMessage, AgentConfig } from '../types';
 import { AIService, AIServiceFactory } from './aiServiceFactory';
 import { usePromptStore } from '../store/usePromptStore';
 import { useAIStore } from '../store/useAIStore';
+import { mergePrompts } from './promptMergeService';
 
 const getAIClient = () => {
   const { agentConfig } = useAIStore.getState();
@@ -53,17 +54,9 @@ const getModel = () => {
 
 const getSelectedPrompt = (): string => {
   try {
-    const { profiles, selectedProfileId } = usePromptStore.getState();
-    const found = profiles.find(p => p.id === selectedProfileId) || profiles[0];
-    if (!found) return '';
-    
-    return `
-[设备配置信息]
-- 类型名称: ${found.name}
-- 设备标识: ${found.deviceType}
-- 核心指令规范: 
-${found.prompt}
-`;
+    const { promptTree, selectedPromptIds } = usePromptStore.getState();
+    const result = mergePrompts(selectedPromptIds, promptTree);
+    return result.content;
   } catch {
     return '';
   }

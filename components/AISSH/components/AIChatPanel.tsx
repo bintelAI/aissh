@@ -9,7 +9,7 @@ import {
   PanelLeft, Activity, Settings2, ShieldAlert, Thermometer, Cpu, X, ZapOff,
   Wand2, ShieldCheck, FileDown, FileUp, Eraser, ChevronDown, History
 } from 'lucide-react';
-import { ChatMessage, LogEntry, ChatSession } from '../types/index';
+import { ChatMessage, LogEntry, ChatSession, ExportConfigData, PromptProfile } from '../types/index';
 import { PromptConfigModal } from './PromptConfigModal';
 import { usePromptStore } from '../store/usePromptStore';
 import { useAIStore } from '../store/useAIStore';
@@ -41,7 +41,15 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
 
   const { agentConfig, setAgentConfig } = useAIStore();
   const { servers, setServers, folders, setFolders, commandTemplates, setCommandTemplates } = useSSHStore();
-  const { profiles, setProfiles, selectedProfileId, selectProfile } = usePromptStore();
+  const { 
+    promptTree, 
+    setPromptTree,
+    selectedPromptIds, 
+    setSelectedPromptIds,
+    togglePromptSelection,
+    selectPrompt,
+    deselectPrompt
+  } = usePromptStore();
 
   const [activeSessionId, setActiveSessionId] = useState<string>(sessions[0]?.id || '1');
   const [input, setInput] = useState('');
@@ -89,14 +97,16 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
   }, [activeServerId, servers, logs.length]);
 
   const handleExportConfig = () => {
-    const data = {
+    const data: ExportConfigData = {
+      version: '2.0.0',
+      exportDate: new Date().toISOString(),
       agentConfig,
       servers,
       folders,
       commandTemplates,
-      promptProfiles: profiles,
-      exportDate: new Date().toISOString(),
-      version: '1.0.1'
+      // 新版树形结构
+      promptTree,
+      selectedPromptIds
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -116,12 +126,31 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const data = JSON.parse(event.target?.result as string);
+        const data: ExportConfigData = JSON.parse(event.target?.result as string);
+        
+        // 导入基本配置
         if (data.agentConfig) setAgentConfig(data.agentConfig);
         if (data.servers) setServers(data.servers);
         if (data.folders) setFolders(data.folders);
         if (data.commandTemplates) setCommandTemplates(data.commandTemplates);
-        if (data.promptProfiles) setProfiles(data.promptProfiles);
+        
+        // 处理提示语配置（兼容新旧版本）
+        if (data.promptTree) {
+          // 新版：直接导入树形结构
+          setPromptTree(data.promptTree);
+          if (data.selectedPromptIds) {
+            setSelectedPromptIds(data.selectedPromptIds);
+          }
+        } else if (data.promptProfiles) {
+          // 旧版：将扁平结构转换为树形结构
+          const migratedTree = migrateProfilesToTree(data.promptProfiles);
+          setPromptTree(migratedTree);
+          // 默认选中第一个提示语
+          const firstPrompt = migratedTree.find(n => n.type === 'prompt');
+          if (firstPrompt) {
+            setSelectedPromptIds([firstPrompt.id]);
+          }
+        }
         
         alert('配置导入成功！');
       } catch (err) {
@@ -132,8 +161,33 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
     reader.readAsText(file);
   };
 
+  // 辅助函数：将旧版扁平结构迁移为树形结构
+  const migrateProfilesToTree = (profiles: PromptProfile[]) => {
+    const migratedFolder = {
+      id: 'folder-imported',
+      name: '导入的配置',
+      type: 'folder' as const,
+      parentId: null,
+      order: 0,
+      isExpanded: true
+    };
+    
+    const migratedNodes = profiles.map((profile, index) => ({
+      id: profile.id,
+      name: profile.name,
+      type: 'prompt' as const,
+      parentId: 'folder-imported',
+      order: index,
+      deviceType: profile.deviceType,
+      prompt: profile.prompt,
+      rules: profile.rules
+    }));
+    
+    return [migratedFolder, ...migratedNodes];
+  };
+
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
-  const profileOptions = profiles.map(p => ({ value: p.id, label: p.name }));
+  
   const modelOptions = [
     { value: 'gemini-3-pro-preview', label: '量子核心 (高智能)' },
     { value: 'gemini-3-flash-preview', label: '神经闪速 (高速度)' },
@@ -827,17 +881,15 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
             </div>
 
             <div className="flex items-center gap-1">
-              <div className="group">
-                 <CyberSelect 
-                   value={selectedProfileId || ''} 
-                   onChange={(val) => selectProfile(val)}
-                   options={profileOptions}
-                   variant="violet"
-                   label={containerWidth > 520 ? "类型" : undefined}
-                   width={containerWidth <= 520 ? '120px' : 'auto'}
-                   direction="up"
-                 />
-               </div>
+              {/* 多选提示语下拉框 */}
+              <div className="group relative">
+                <MultiSelectPrompt
+                  selectedIds={selectedPromptIds}
+                  promptTree={promptTree}
+                  onToggle={togglePromptSelection}
+                  containerWidth={containerWidth}
+                />
+              </div>
               <div className="group relative">
                 <button 
                   onClick={handleClearSession} 
@@ -1127,3 +1179,183 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
     </div>
   );
 });
+
+// 多选提示语组件 (树形结构)
+interface MultiSelectPromptProps {
+  selectedIds: string[];
+  promptTree: import('../types').PromptNode[];
+  onToggle: (id: string) => void;
+  containerWidth: number;
+}
+
+// 获取子节点
+const getChildNodes = (tree: import('../types').PromptNode[], parentId: string | null): import('../types').PromptNode[] => {
+  return tree
+    .filter(node => node.parentId === parentId)
+    .sort((a, b) => a.order - b.order);
+};
+
+const MultiSelectPrompt: React.FC<MultiSelectPromptProps> = ({
+  selectedIds,
+  promptTree,
+  onToggle,
+  containerWidth
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // 点击外部关闭下拉框
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // 初始化展开所有文件夹
+  useEffect(() => {
+    const folderIds = promptTree
+      .filter(n => n.type === 'folder')
+      .map(n => n.id);
+    setExpandedFolders(new Set(folderIds));
+  }, [promptTree]);
+
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  };
+
+  const selectedLabels = selectedIds
+    .map(id => promptTree.find(n => n.id === id)?.name)
+    .filter(Boolean);
+
+  const displayText = selectedLabels.length === 0
+    ? '选择提示语'
+    : selectedLabels.length === 1
+      ? selectedLabels[0]
+      : `已选 ${selectedLabels.length} 个`;
+
+  // 递归渲染树节点
+  const renderTreeNode = (node: import('../types').PromptNode, level: number = 0) => {
+    const isFolder = node.type === 'folder';
+    const isExpanded = expandedFolders.has(node.id);
+    const isSelected = selectedIds.includes(node.id);
+    const children = getChildNodes(promptTree, node.id);
+
+    if (isFolder) {
+      return (
+        <div key={node.id}>
+          <button
+            onClick={() => toggleFolder(node.id)}
+            className="
+              w-full px-2 py-1.5 text-xs text-left flex items-center gap-1
+              text-sci-cyan/80 hover:bg-white/5 transition-all
+            "
+            style={{ paddingLeft: `${level * 12 + 8}px` }}
+          >
+            <ChevronDown
+              size={12}
+              className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`}
+            />
+            <span className="truncate">📁 {node.name}</span>
+          </button>
+          {isExpanded && children.length > 0 && (
+            <div>
+              {children.map(child => renderTreeNode(child, level + 1))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // 提示语节点
+    return (
+      <button
+        key={node.id}
+        onClick={() => onToggle(node.id)}
+        className={`
+          w-full px-2 py-1.5 text-xs text-left flex items-center gap-2
+          transition-all clip-corner
+          ${isSelected
+            ? 'bg-sci-violet/20 text-sci-violet border border-sci-violet/30'
+            : 'text-sci-text hover:bg-white/5 border border-transparent'
+          }
+        `}
+        style={{ paddingLeft: `${level * 12 + 8}px` }}
+      >
+        <div className={`
+          w-4 h-4 border rounded flex items-center justify-center shrink-0
+          ${isSelected ? 'bg-sci-violet border-sci-violet' : 'border-white/30'}
+        `}>
+          {isSelected && <Check size={10} className="text-black" />}
+        </div>
+        <span className="truncate flex-1">📝 {node.name}</span>
+      </button>
+    );
+  };
+
+  const rootNodes = getChildNodes(promptTree, null);
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`
+          h-8 px-3 flex items-center gap-2 bg-black/40 border border-sci-violet/30
+          text-sci-text text-xs font-sci uppercase tracking-wider
+          hover:border-sci-violet/60 transition-all clip-corner
+          ${isOpen ? 'border-sci-violet bg-sci-violet/10' : ''}
+        `}
+        style={{ minWidth: containerWidth <= 520 ? '120px' : '150px' }}
+      >
+        <span className="truncate flex-1 text-left">{displayText}</span>
+        <ChevronDown size={12} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="
+          absolute bottom-full left-0 mb-1 z-50
+          min-w-[220px] max-w-[300px] max-h-[300px]
+          bg-sci-obsidian border border-sci-violet/30
+          shadow-[0_0_20px_rgba(139,92,246,0.2)]
+          overflow-y-auto custom-scrollbar
+        ">
+          <div className="p-1">
+            {rootNodes.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-white/40 text-center">
+                暂无提示语配置
+              </div>
+            ) : (
+              rootNodes.map(node => renderTreeNode(node, 0))
+            )}
+          </div>
+
+          {selectedIds.length > 0 && (
+            <div className="p-2 border-t border-white/10 bg-black/20">
+              <button
+                onClick={() => {
+                  selectedIds.forEach(id => onToggle(id));
+                }}
+                className="w-full px-3 py-1.5 text-[10px] text-sci-red/80 hover:text-sci-red
+                  hover:bg-sci-red/10 transition-all text-center"
+              >
+                清除全部选择
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};

@@ -1,13 +1,26 @@
 import { create } from 'zustand';
-import { PromptProfile, PromptConfigState, HighlightRule } from '../types';
+import { PromptNode, PromptNodeType, HighlightRule, PromptProfile } from '../types';
 
-const LS_PROFILES_KEY = 'ssh_prompt_profiles';
-const LS_SELECTED_KEY = 'ssh_selected_prompt_profile';
+const LS_TREE_KEY = 'ssh_prompt_tree_v2';
+const LS_SELECTED_KEY = 'ssh_selected_prompt_ids_v2';
+const LS_LEGACY_PROFILES_KEY = 'ssh_prompt_profiles';
 
-const defaultProfiles: PromptProfile[] = [
+// 默认树形结构
+const defaultTree: PromptNode[] = [
+  {
+    id: 'folder-default',
+    name: '默认配置',
+    type: 'folder',
+    parentId: null,
+    order: 0,
+    isExpanded: true
+  },
   {
     id: 'p-linux',
     name: '通用 Linux 配置',
+    type: 'prompt',
+    parentId: 'folder-default',
+    order: 0,
     deviceType: 'linux',
     prompt:
       '你是在 Linux 服务器环境下执行操作，所有命令需兼容常见发行版。遵循安全与备份原则，禁止未经确认的破坏性命令。',
@@ -19,8 +32,19 @@ const defaultProfiles: PromptProfile[] = [
     ]
   },
   {
+    id: 'folder-network',
+    name: '网络设备',
+    type: 'folder',
+    parentId: null,
+    order: 1,
+    isExpanded: true
+  },
+  {
     id: 'p-cisco',
     name: '思科网络设备',
+    type: 'prompt',
+    parentId: 'folder-network',
+    order: 0,
     deviceType: 'cisco',
     prompt:
       `
@@ -41,16 +65,20 @@ const defaultProfiles: PromptProfile[] = [
 - \`config-register 0x2142\` 跳过配置启动
 - 任何带 \`force\`、\`reset\`、\`shutdown\`、\`delete /force\` 等关键字的命令
 
-> 若必须执行，须提前输出完整回滚方案与业务影响评估，并让用户二次确认 **“已知晓风险并同意继续”** 后方可操作。
+> 若必须执行，须提前输出完整回滚方案与业务影响评估，并让用户二次确认 **"已知晓风险并同意继续"** 后方可操作。
       `,
     rules: [
       { id: 'r-conf', pattern: '(configure terminal|conf t)', color: 'violet', remark: '进入配置模式' },
       { id: 'r-int', pattern: '(interface\\s+\\S+)', color: 'blue', remark: '接口配置' },
       { id: 'r-show', pattern: '\\bshow\\b', color: 'cyan', remark: '查看命令' }
     ]
-  },  {
-    id: 'san',
+  },
+  {
+    id: 'p-san',
     name: '博科光交',
+    type: 'prompt',
+    parentId: 'folder-network',
+    order: 1,
     deviceType: 'san',
     prompt:
       ` 
@@ -69,7 +97,7 @@ const defaultProfiles: PromptProfile[] = [
 - \`portcfgdefault\` / \`switchcfgdefault\` 恢复出厂默认
 - 任何带 \`force\`、\`clear\`、\`reset\`、\`kill\` 等关键字的命令
 
-> 若必须执行，须提前输出完整回滚方案与业务影响评估，并让用户二次确认 **“已知晓风险并同意继续”** 后方可操作。
+> 若必须执行，须提前输出完整回滚方案与业务影响评估，并让用户二次确认 **"已知晓风险并同意继续"** 后方可操作。
       
       `,
     rules: [
@@ -80,116 +108,382 @@ const defaultProfiles: PromptProfile[] = [
   }
 ];
 
-const loadProfiles = (): { profiles: PromptProfile[]; migrated: boolean } => {
-  const saved = localStorage.getItem(LS_PROFILES_KEY);
+// 从旧版配置迁移
+const migrateFromLegacy = (): PromptNode[] => {
+  const saved = localStorage.getItem(LS_LEGACY_PROFILES_KEY);
+  if (!saved) return defaultTree;
+
+  try {
+    const profiles: PromptProfile[] = JSON.parse(saved);
+    if (!Array.isArray(profiles) || profiles.length === 0) return defaultTree;
+
+    // 创建迁移文件夹
+    const migratedFolder: PromptNode = {
+      id: 'folder-migrated',
+      name: '已迁移配置',
+      type: 'folder',
+      parentId: null,
+      order: 0,
+      isExpanded: true
+    };
+
+    // 转换旧配置为树形节点
+    const migratedNodes: PromptNode[] = profiles.map((profile, index) => ({
+      id: profile.id,
+      name: profile.name,
+      type: 'prompt',
+      parentId: 'folder-migrated',
+      order: index,
+      deviceType: profile.deviceType,
+      prompt: profile.prompt,
+      rules: profile.rules
+    }));
+
+    return [migratedFolder, ...migratedNodes];
+  } catch {
+    return defaultTree;
+  }
+};
+
+// 加载树形结构
+const loadTree = (): PromptNode[] => {
+  const saved = localStorage.getItem(LS_TREE_KEY);
   if (saved) {
     try {
-      return { profiles: JSON.parse(saved), migrated: false };
+      return JSON.parse(saved);
     } catch {}
   }
-  let migrated = false;
-  try {
-    const agentConfig = JSON.parse(localStorage.getItem('ssh_agent_config') || '{}');
-    const customPrompt = agentConfig?.customPrompt;
-    if (customPrompt && typeof customPrompt === 'string' && customPrompt.trim().length > 0) {
-      defaultProfiles[0] = { ...defaultProfiles[0], prompt: customPrompt };
-      migrated = true;
-    }
-  } catch {}
-  return { profiles: defaultProfiles, migrated };
+  // 尝试从旧版迁移
+  return migrateFromLegacy();
 };
 
-const loadSelected = (): string | null => {
+// 加载选中的提示语ID
+const loadSelectedIds = (): string[] => {
   const saved = localStorage.getItem(LS_SELECTED_KEY);
-  return saved || defaultProfiles[0].id;
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch {}
+  }
+  // 默认选中第一个提示语
+  return ['p-linux'];
 };
 
-export const usePromptStore = create<PromptConfigState & {
-  setProfiles: (profiles: PromptProfile[] | ((prev: PromptProfile[]) => PromptProfile[])) => void;
-  selectProfile: (id: string | null) => void;
-  addProfile: (profile: Omit<PromptProfile, 'id'>) => void;
-  updateProfile: (id: string, data: Partial<PromptProfile>) => void;
-  deleteProfile: (id: string) => void;
-  addRule: (profileId: string, rule: Omit<HighlightRule, 'id'>) => void;
-  updateRule: (profileId: string, ruleId: string, data: Partial<HighlightRule>) => void;
-  deleteRule: (profileId: string, ruleId: string) => void;
-}>((set) => ({
-  profiles: (() => {
-    const { profiles, migrated } = loadProfiles();
-    if (migrated) {
-      try { localStorage.setItem(LS_PROFILES_KEY, JSON.stringify(profiles)); } catch {}
+// 工具函数：获取所有提示语节点（扁平化）
+export const getAllPromptNodes = (tree: PromptNode[]): PromptNode[] => {
+  const result: PromptNode[] = [];
+  const traverse = (nodes: PromptNode[]) => {
+    nodes.forEach(node => {
+      if (node.type === 'prompt') {
+        result.push(node);
+      }
+    });
+  };
+  traverse(tree);
+  return result;
+};
+
+// 工具函数：根据ID查找节点
+export const findNodeById = (tree: PromptNode[], id: string): PromptNode | null => {
+  for (const node of tree) {
+    if (node.id === id) return node;
+  }
+  return null;
+};
+
+// 工具函数：获取子节点
+export const getChildNodes = (tree: PromptNode[], parentId: string | null): PromptNode[] => {
+  return tree
+    .filter(node => node.parentId === parentId)
+    .sort((a, b) => a.order - b.order);
+};
+
+// 工具函数：生成唯一ID
+const generateId = (prefix: string = 'node'): string => {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+};
+
+interface PromptStoreState {
+  promptTree: PromptNode[];
+  selectedPromptIds: string[];
+}
+
+interface PromptStoreActions {
+  // 树形结构操作
+  setPromptTree: (tree: PromptNode[] | ((prev: PromptNode[]) => PromptNode[])) => void;
+  addNode: (node: Omit<PromptNode, 'id' | 'order'>, parentId?: string | null) => void;
+  updateNode: (id: string, data: Partial<PromptNode>) => void;
+  deleteNode: (id: string) => void;
+  moveNode: (id: string, newParentId: string | null, newOrder?: number) => void;
+  toggleFolder: (id: string) => void;
+
+  // 多选操作
+  setSelectedPromptIds: (ids: string[] | ((prev: string[]) => string[])) => void;
+  togglePromptSelection: (id: string) => void;
+  selectPrompt: (id: string) => void;
+  deselectPrompt: (id: string) => void;
+
+  // 高亮规则操作
+  addRule: (promptId: string, rule: Omit<HighlightRule, 'id'>) => void;
+  updateRule: (promptId: string, ruleId: string, data: Partial<HighlightRule>) => void;
+  deleteRule: (promptId: string, ruleId: string) => void;
+
+  // 获取整合后的提示语
+  getMergedPrompt: () => string;
+  getSelectedPrompts: () => PromptNode[];
+}
+
+export const usePromptStore = create<PromptStoreState & PromptStoreActions>((set, get) => ({
+  promptTree: loadTree(),
+  selectedPromptIds: loadSelectedIds(),
+
+  // ============ 树形结构操作 ============
+
+  setPromptTree: (tree) =>
+    set((state) => {
+      const next = typeof tree === 'function' ? tree(state.promptTree) : tree;
+      localStorage.setItem(LS_TREE_KEY, JSON.stringify(next));
+      return { promptTree: next };
+    }),
+
+  addNode: (nodeData, parentId = null) =>
+    set((state) => {
+      const siblings = state.promptTree.filter(n => n.parentId === parentId);
+      const newNode: PromptNode = {
+        ...nodeData,
+        id: generateId(nodeData.type),
+        parentId,
+        order: siblings.length
+      } as PromptNode;
+
+      const newTree = [...state.promptTree, newNode];
+      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
+      return { promptTree: newTree };
+    }),
+
+  updateNode: (id, data) =>
+    set((state) => {
+      const newTree = state.promptTree.map((node) =>
+        node.id === id ? { ...node, ...data } : node
+      );
+      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
+      return { promptTree: newTree };
+    }),
+
+  deleteNode: (id) =>
+    set((state) => {
+      // 递归删除节点及其子节点
+      const idsToDelete = new Set<string>();
+      const collectIds = (nodeId: string) => {
+        idsToDelete.add(nodeId);
+        state.promptTree
+          .filter(n => n.parentId === nodeId)
+          .forEach(child => collectIds(child.id));
+      };
+      collectIds(id);
+
+      const newTree = state.promptTree.filter((node) => !idsToDelete.has(node.id));
+
+      // 更新选中状态
+      const newSelectedIds = state.selectedPromptIds.filter(sid => !idsToDelete.has(sid));
+
+      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
+      localStorage.setItem(LS_SELECTED_KEY, JSON.stringify(newSelectedIds));
+
+      return { promptTree: newTree, selectedPromptIds: newSelectedIds };
+    }),
+
+  moveNode: (id, newParentId, newOrder) =>
+    set((state) => {
+      const node = state.promptTree.find(n => n.id === id);
+      if (!node) return state;
+
+      // 检查是否移动到子节点中（防止循环）
+      const isDescendant = (parentId: string, childId: string): boolean => {
+        if (parentId === childId) return true;
+        const children = state.promptTree.filter(n => n.parentId === childId);
+        return children.some(child => isDescendant(parentId, child.id));
+      };
+
+      if (newParentId && isDescendant(id, newParentId)) {
+        console.error('Cannot move a node to its own descendant');
+        return state;
+      }
+
+      let newTree = state.promptTree.map((n) => {
+        if (n.id === id) {
+          return { ...n, parentId: newParentId, order: newOrder ?? n.order };
+        }
+        return n;
+      });
+
+      // 重新排序同级的其他节点
+      if (newOrder !== undefined) {
+        const siblings = newTree
+          .filter(n => n.parentId === newParentId && n.id !== id)
+          .sort((a, b) => a.order - b.order);
+
+        siblings.splice(newOrder, 0, newTree.find(n => n.id === id)!);
+
+        siblings.forEach((sibling, index) => {
+          const idx = newTree.findIndex(n => n.id === sibling.id);
+          if (idx !== -1) {
+            newTree[idx] = { ...newTree[idx], order: index };
+          }
+        });
+      }
+
+      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
+      return { promptTree: newTree };
+    }),
+
+  toggleFolder: (id) =>
+    set((state) => {
+      const newTree = state.promptTree.map((node) =>
+        node.id === id ? { ...node, isExpanded: !node.isExpanded } : node
+      );
+      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
+      return { promptTree: newTree };
+    }),
+
+  // ============ 多选操作 ============
+
+  setSelectedPromptIds: (ids) =>
+    set((state) => {
+      const next = typeof ids === 'function' ? ids(state.selectedPromptIds) : ids;
+      localStorage.setItem(LS_SELECTED_KEY, JSON.stringify(next));
+      return { selectedPromptIds: next };
+    }),
+
+  togglePromptSelection: (id) =>
+    set((state) => {
+      const node = state.promptTree.find(n => n.id === id);
+      if (!node || node.type !== 'prompt') return state;
+
+      const newSelectedIds = state.selectedPromptIds.includes(id)
+        ? state.selectedPromptIds.filter(sid => sid !== id)
+        : [...state.selectedPromptIds, id];
+
+      localStorage.setItem(LS_SELECTED_KEY, JSON.stringify(newSelectedIds));
+      return { selectedPromptIds: newSelectedIds };
+    }),
+
+  selectPrompt: (id) =>
+    set((state) => {
+      const node = state.promptTree.find(n => n.id === id);
+      if (!node || node.type !== 'prompt') return state;
+
+      if (state.selectedPromptIds.includes(id)) return state;
+
+      const newSelectedIds = [...state.selectedPromptIds, id];
+      localStorage.setItem(LS_SELECTED_KEY, JSON.stringify(newSelectedIds));
+      return { selectedPromptIds: newSelectedIds };
+    }),
+
+  deselectPrompt: (id) =>
+    set((state) => {
+      const newSelectedIds = state.selectedPromptIds.filter(sid => sid !== id);
+      localStorage.setItem(LS_SELECTED_KEY, JSON.stringify(newSelectedIds));
+      return { selectedPromptIds: newSelectedIds };
+    }),
+
+  // ============ 高亮规则操作 ============
+
+  addRule: (promptId, rule) =>
+    set((state) => {
+      const newTree = state.promptTree.map((node) => {
+        if (node.id === promptId && node.type === 'prompt') {
+          const newRule: HighlightRule = {
+            ...rule,
+            id: generateId('rule')
+          };
+          return {
+            ...node,
+            rules: [...(node.rules || []), newRule]
+          };
+        }
+        return node;
+      });
+      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
+      return { promptTree: newTree };
+    }),
+
+  updateRule: (promptId, ruleId, data) =>
+    set((state) => {
+      const newTree = state.promptTree.map((node) => {
+        if (node.id === promptId && node.type === 'prompt') {
+          return {
+            ...node,
+            rules: node.rules?.map((rule) =>
+              rule.id === ruleId ? { ...rule, ...data } : rule
+            ) || []
+          };
+        }
+        return node;
+      });
+      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
+      return { promptTree: newTree };
+    }),
+
+  deleteRule: (promptId, ruleId) =>
+    set((state) => {
+      const newTree = state.promptTree.map((node) => {
+        if (node.id === promptId && node.type === 'prompt') {
+          return {
+            ...node,
+            rules: node.rules?.filter((rule) => rule.id !== ruleId) || []
+          };
+        }
+        return node;
+      });
+      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
+      return { promptTree: newTree };
+    }),
+
+  // ============ 获取整合后的提示语 ============
+
+  getSelectedPrompts: () => {
+    const state = get();
+    return state.selectedPromptIds
+      .map(id => findNodeById(state.promptTree, id))
+      .filter((node): node is PromptNode => node !== null && node.type === 'prompt');
+  },
+
+  getMergedPrompt: () => {
+    const state = get();
+    const selectedPrompts = state.selectedPromptIds
+      .map(id => findNodeById(state.promptTree, id))
+      .filter((node): node is PromptNode => node !== null && node.type === 'prompt');
+
+    if (selectedPrompts.length === 0) return '';
+    if (selectedPrompts.length === 1) {
+      const p = selectedPrompts[0];
+      return `
+[设备配置信息]
+- 类型名称: ${p.name}
+- 设备标识: ${p.deviceType || 'custom'}
+- 核心指令规范: 
+${p.prompt || ''}
+`;
     }
-    return profiles;
-  })(),
-  selectedProfileId: loadSelected(),
 
-  setProfiles: (profiles) =>
-    set((state) => {
-      const next = typeof profiles === 'function' ? profiles(state.profiles) : profiles;
-      localStorage.setItem(LS_PROFILES_KEY, JSON.stringify(next));
-      return { profiles: next };
-    }),
+    // 多个提示语整合
+    const sections = selectedPrompts.map((p, index) => `
+--- 配置 ${index + 1}: ${p.name} ---
+- 设备标识: ${p.deviceType || 'custom'}
+- 核心指令规范: 
+${p.prompt || ''}
+`);
 
-  selectProfile: (id) =>
-    set(() => {
-      const next = id;
-      if (next) localStorage.setItem(LS_SELECTED_KEY, next);
-      return { selectedProfileId: next };
-    }),
+    return `
+[多设备配置信息 - 共 ${selectedPrompts.length} 个配置]
+${sections.join('\n')}
 
-  addProfile: (profile) =>
-    set((state) => {
-      const next: PromptProfile = { ...profile, id: Date.now().toString() };
-      const profiles = [...state.profiles, next];
-      localStorage.setItem(LS_PROFILES_KEY, JSON.stringify(profiles));
-      const selectedProfileId = next.id;
-      localStorage.setItem(LS_SELECTED_KEY, selectedProfileId);
-      return { profiles, selectedProfileId };
-    }),
-
-  updateProfile: (id, data) =>
-    set((state) => {
-      const profiles = state.profiles.map((p) => (p.id === id ? { ...p, ...data } : p));
-      localStorage.setItem(LS_PROFILES_KEY, JSON.stringify(profiles));
-      return { profiles };
-    }),
-
-  deleteProfile: (id) =>
-    set((state) => {
-      const profiles = state.profiles.filter((p) => p.id !== id);
-      localStorage.setItem(LS_PROFILES_KEY, JSON.stringify(profiles));
-      const selectedProfileId =
-        state.selectedProfileId === id ? profiles[0]?.id || null : state.selectedProfileId;
-      if (selectedProfileId) localStorage.setItem(LS_SELECTED_KEY, selectedProfileId);
-      return { profiles, selectedProfileId };
-    }),
-
-  addRule: (profileId, rule) =>
-    set((state) => {
-      const profiles = state.profiles.map((p) =>
-        p.id === profileId ? { ...p, rules: [...p.rules, { ...rule, id: Date.now().toString() }] } : p
-      );
-      localStorage.setItem(LS_PROFILES_KEY, JSON.stringify(profiles));
-      return { profiles };
-    }),
-
-  updateRule: (profileId, ruleId, data) =>
-    set((state) => {
-      const profiles = state.profiles.map((p) =>
-        p.id === profileId
-          ? { ...p, rules: p.rules.map((r) => (r.id === ruleId ? { ...r, ...data } : r)) }
-          : p
-      );
-      localStorage.setItem(LS_PROFILES_KEY, JSON.stringify(profiles));
-      return { profiles };
-    }),
-
-  deleteRule: (profileId, ruleId) =>
-    set((state) => {
-      const profiles = state.profiles.map((p) =>
-        p.id === profileId ? { ...p, rules: p.rules.filter((r) => r.id !== ruleId) } : p
-      );
-      localStorage.setItem(LS_PROFILES_KEY, JSON.stringify(profiles));
-      return { profiles };
-    })
+[整合说明]
+以上配置需要综合考虑，在执行命令时请结合所有设备的特性规范。
+`;
+  }
 }));
+
+// 兼容旧版导出
+export const usePromptStoreLegacy = usePromptStore;

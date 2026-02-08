@@ -142,9 +142,46 @@ export interface PromptProfile {
   rules: HighlightRule[];
 }
 
+// ============ 新版树形提示语配置类型 ============
+
+export type PromptNodeType = 'folder' | 'prompt';
+
+export interface PromptNode {
+  id: string;
+  name: string;
+  type: PromptNodeType;
+  parentId: string | null;
+  order: number;
+  // 当 type='prompt' 时有效
+  deviceType?: string;
+  prompt?: string;
+  rules?: HighlightRule[];
+  // 当 type='folder' 时有效
+  isExpanded?: boolean;
+}
+
 export interface PromptConfigState {
-  profiles: PromptProfile[];
-  selectedProfileId: string | null;
+  // 旧版字段（兼容）
+  profiles?: PromptProfile[];
+  selectedProfileId?: string | null;
+  // 新版字段
+  promptTree: PromptNode[];
+  selectedPromptIds: string[];
+}
+
+// 导出配置数据结构
+export interface ExportConfigData {
+  version: string;
+  exportDate: string;
+  agentConfig?: AgentConfig;
+  servers?: Server[];
+  folders?: Folder[];
+  commandTemplates?: CommandTemplate[];
+  // 新版树形结构
+  promptTree?: PromptNode[];
+  selectedPromptIds?: string[];
+  // 旧版兼容
+  promptProfiles?: PromptProfile[];
 }
 
 // File Management Types

@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Command, Terminal as TerminalIcon, ChevronDown, Send, Brain, Sparkles, Loader2, X, AlertTriangle, Info, BookOpen, Save, ArrowRightLeft } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Command, Terminal as TerminalIcon, ChevronDown, Send, Brain, Sparkles, Loader2, X, AlertTriangle, Info, BookOpen, Save, ArrowRightLeft, Check } from 'lucide-react';
 import { CyberPanel } from '../common/CyberPanel';
 import { CyberSelect } from '../common/CyberSelect';
 import { useSSHStore } from '../store/useSSHStore';
@@ -8,6 +8,7 @@ import { SingleExecutionStrategy, BatchExecutionStrategy, BatchCompareStrategy, 
 import { CommandTemplateModal } from './CommandTemplateModal';
 import { BatchResultCompare } from './BatchResultCompare';
 import { usePromptStore } from '../store/usePromptStore';
+import type { PromptNode } from '../types';
 
 interface CommandInputProps {
   onInsertCommand: (command: string) => void;
@@ -15,7 +16,7 @@ interface CommandInputProps {
 
 export const CommandInput: React.FC<CommandInputProps> = ({ onInsertCommand }) => {
   const { servers, activeSessionId, openSessions, addLog, commandHistory, addCommandToHistory, batchResults, addBatchResult, clearBatchResults, commandTemplates } = useSSHStore();
-  const { profiles, selectedProfileId, selectProfile } = usePromptStore();
+  const { promptTree, selectedPromptIds, setSelectedPromptIds, togglePromptSelection } = usePromptStore();
   const [globalCommand, setGlobalCommand] = useState('');
   const [operationMode, setOperationMode] = useState<'single' | 'batch' | 'compare'>('single');
   const [isAIProcessing, setIsAIProcessing] = useState(false);
@@ -36,7 +37,13 @@ export const CommandInput: React.FC<CommandInputProps> = ({ onInsertCommand }) =
     { value: 'compare', label: '批量对比' },
   ];
 
-  const profileOptions = profiles.map(p => ({ value: p.id, label: p.name }));
+  // 内联工具函数，避免模块导入问题
+  const getAllPromptNodesLocal = (tree: PromptNode[]): PromptNode[] => {
+    return tree.filter(node => node.type === 'prompt');
+  };
+  
+  const allPromptNodes = getAllPromptNodesLocal(promptTree);
+  const profileOptions = allPromptNodes.map(p => ({ value: p.id, label: p.name }));
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowUp') {
@@ -196,15 +203,11 @@ export const CommandInput: React.FC<CommandInputProps> = ({ onInsertCommand }) =
            </div>
 
 
-           <div className="flex items-center gap-1 min-w-[120px]">
-             <CyberSelect 
-               value={selectedProfileId || ''} 
-               onChange={(val) => selectProfile(val)}
-               options={profileOptions}
-               variant="violet"
-               label="类型"
-               width="100%"
-               direction="up"
+           <div className="flex items-center gap-1 min-w-[140px]">
+             <MultiSelectPrompt
+               selectedIds={selectedPromptIds}
+               promptTree={promptTree}
+               onToggle={togglePromptSelection}
              />
            </div>
 
@@ -369,5 +372,167 @@ export const CommandInput: React.FC<CommandInputProps> = ({ onInsertCommand }) =
         />
       )}
     </>
+  );
+};
+
+// 多选提示语组件 (树形结构)
+interface MultiSelectPromptProps {
+  selectedIds: string[];
+  promptTree: PromptNode[];
+  onToggle: (id: string) => void;
+}
+
+// 获取子节点
+const getChildNodes = (tree: PromptNode[], parentId: string | null): PromptNode[] => {
+  return tree
+    .filter(node => node.parentId === parentId)
+    .sort((a, b) => a.order - b.order);
+};
+
+const MultiSelectPrompt: React.FC<MultiSelectPromptProps> = ({
+  selectedIds,
+  promptTree,
+  onToggle
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // 初始化展开所有文件夹
+  useEffect(() => {
+    const folderIds = promptTree
+      .filter(n => n.type === 'folder')
+      .map(n => n.id);
+    setExpandedFolders(new Set(folderIds));
+  }, [promptTree]);
+
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  };
+
+  const selectedLabels = selectedIds
+    .map(id => promptTree.find(n => n.id === id)?.name)
+    .filter(Boolean);
+
+  const displayText = selectedLabels.length === 0
+    ? '选择提示语'
+    : selectedLabels.length === 1
+      ? selectedLabels[0]
+      : `已选 ${selectedLabels.length} 个`;
+
+  // 递归渲染树节点
+  const renderTreeNode = (node: PromptNode, level: number = 0) => {
+    const isFolder = node.type === 'folder';
+    const isExpanded = expandedFolders.has(node.id);
+    const isSelected = selectedIds.includes(node.id);
+    const children = getChildNodes(promptTree, node.id);
+
+    if (isFolder) {
+      return (
+        <div key={node.id}>
+          <button
+            onClick={() => toggleFolder(node.id)}
+            className="
+              w-full px-2 py-1.5 text-xs text-left flex items-center gap-1
+              text-sci-cyan/80 hover:bg-white/5 transition-all
+            "
+            style={{ paddingLeft: `${level * 12 + 8}px` }}
+          >
+            <ChevronDown
+              size={12}
+              className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`}
+            />
+            <span className="truncate">📁 {node.name}</span>
+          </button>
+          {isExpanded && children.length > 0 && (
+            <div>
+              {children.map(child => renderTreeNode(child, level + 1))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // 提示语节点
+    return (
+      <button
+        key={node.id}
+        onClick={() => onToggle(node.id)}
+        className={`
+          w-full px-2 py-1.5 text-xs text-left flex items-center gap-2
+          transition-all clip-corner
+          ${isSelected
+            ? 'bg-sci-violet/20 text-sci-violet border border-sci-violet/30'
+            : 'text-sci-text hover:bg-white/5 border border-transparent'
+          }
+        `}
+        style={{ paddingLeft: `${level * 12 + 8}px` }}
+      >
+        <div className={`
+          w-4 h-4 border rounded flex items-center justify-center shrink-0
+          ${isSelected ? 'bg-sci-violet border-sci-violet' : 'border-white/30'}
+        `}>
+          {isSelected && <Check size={10} className="text-black" />}
+        </div>
+        <span className="truncate flex-1">📝 {node.name}</span>
+      </button>
+    );
+  };
+
+  const rootNodes = getChildNodes(promptTree, null);
+
+  return (
+    <div ref={dropdownRef} className="relative w-full">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`
+          w-full h-8 px-3 flex items-center gap-2 bg-black/40 border border-sci-violet/30
+          text-sci-text text-xs font-sci uppercase tracking-wider
+          hover:border-sci-violet/60 transition-all clip-corner
+          ${isOpen ? 'border-sci-violet bg-sci-violet/10' : ''}
+        `}
+      >
+        <span className="truncate flex-1 text-left">{displayText}</span>
+        <ChevronDown size={12} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="
+          absolute bottom-full left-0 mb-1 z-50
+          w-full min-w-[220px]
+          bg-sci-obsidian border border-sci-violet/30
+          shadow-[0_0_20px_rgba(139,92,246,0.2)]
+          max-h-[280px] overflow-y-auto custom-scrollbar
+        ">
+          <div className="p-1">
+            {rootNodes.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-white/40 text-center">
+                暂无提示语配置
+              </div>
+            ) : (
+              rootNodes.map(node => renderTreeNode(node, 0))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
