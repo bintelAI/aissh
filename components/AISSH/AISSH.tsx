@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ServerTree, AddServerModal, PasswordModal, AIChatPanel, sshManager } from './index';
 import type { AIChatPanelRef } from './index';
+import { MultiIPOperationCenter } from './components/MultiIPOperationCenter';
 import { useSSHStore } from './store/useSSHStore';
 import { useFileStore } from './store/useFileStore';
+import { useMultiIPStore } from './store/useMultiIPStore';
 import { SessionTabs } from './components/SessionTabs';
 import { TerminalArea } from './components/TerminalArea';
 import { CommandInput } from './components/CommandInput';
@@ -10,7 +12,7 @@ import { MonacoEditor } from './components/FileEditor/MonacoEditor';
 import { FileBrowser } from './components/FileEditor/FileBrowser';
 import { FileOperations } from './components/FileEditor/FileOperations';
 import { FileTabs } from './components/FileEditor/FileTabs';
-import { Terminal, Sparkles } from 'lucide-react';
+import { Terminal, Sparkles, Cpu, Activity } from 'lucide-react';
 import { CyberBackground } from './common/CyberBackground';
 import { HackerStandby } from './components/HackerStandby';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -44,6 +46,12 @@ const AISSH: React.FC = () => {
   const [passwordPrompt, setPasswordPrompt] = useState<{ serverId: string, serverName: string } | null>(null);
   const [commandToInsert, setCommandToInsert] = useState<string | null>(null);
   const aiChatPanelRef = useRef<AIChatPanelRef>(null);
+
+  // 多 IP 操作中心状态
+  const [isMultiIPCenterOpen, setIsMultiIPCenterOpen] = useState(false);
+  const { operations, activeOperationId } = useMultiIPStore();
+  const activeOperation = operations.find(op => op.id === activeOperationId);
+  const hasRunningOperation = operations.some(op => op.status === 'running');
 
   const [leftWidth, setLeftWidth] = useState(280);
   const [fileBrowserWidth, setFileBrowserWidth] = useState(310);
@@ -154,6 +162,64 @@ const AISSH: React.FC = () => {
          setPasswordPrompt({ serverId: realId, serverName: server.name });
       }
     }
+  };
+
+  // 批量连接目录下的服务器
+  const handleBatchConnect = (serverIds: string[]) => {
+    if (!serverIds || serverIds.length === 0) return;
+    
+    addLog({
+      timestamp: new Date().toLocaleTimeString(),
+      type: 'info',
+      content: `开始批量连接 ${serverIds.length} 台服务器...`,
+      serverId: 'system'
+    });
+    
+    // 依次连接每个服务器
+    serverIds.forEach((serverId, index) => {
+      // 延迟连接，避免同时发起过多连接
+      setTimeout(() => {
+        const server = servers.find(s => s.id === serverId);
+        if (!server) return;
+        
+        // 如果已经连接，跳过
+        if (server.status === 'connected') {
+          addLog({
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'info',
+            content: `服务器 ${server.name} (${server.ip}) 已连接，跳过`,
+            serverId: serverId
+          });
+          return;
+        }
+        
+        // 检查失败次数
+        const failureCount = failureCounts[serverId] || 0;
+        if (failureCount >= 2) {
+          addLog({
+            timestamp: new Date().toLocaleTimeString(),
+            type: 'warning',
+            content: `服务器 ${server.name} (${server.ip}) 连接失败次数过多，跳过`,
+            serverId: serverId
+          });
+          return;
+        }
+        
+        // 添加到打开会话列表
+        if (!openSessions.includes(serverId)) {
+          setOpenSessions(prev => [...prev, serverId]);
+        }
+        
+        if (server.password) {
+          resetFailureCount(serverId);
+          updateConnectionStatus(serverId, 'connecting');
+          sshManager.connect(server.ip, server.username, server.password, serverId);
+        } else {
+          // 没有密码的服务器，提示输入密码
+          setPasswordPrompt({ serverId: serverId, serverName: server.name });
+        }
+      }, index * 500); // 每个连接间隔 500ms
+    });
   };
 
   const handlePasswordConfirm = (password: string, remember: boolean) => {
@@ -289,6 +355,7 @@ const AISSH: React.FC = () => {
                 }
              }
           }}
+          onBatchConnect={handleBatchConnect}
         />
       </motion.div>
 
@@ -300,22 +367,54 @@ const AISSH: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 bg-transparent relative h-screen">
         <div className="flex items-center justify-between pr-4 bg-sci-obsidian/20 backdrop-blur-sm border-b border-white/5">
           <SessionTabs />
-          <motion.button 
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsAIPanelOpen(!isAIPanelOpen)}
-            className={`ml-auto mt-1 p-1 rounded-lg transition-all duration-300 group relative ${
-              isAIPanelOpen 
-                ? 'text-sci-cyan bg-sci-cyan/10 border-sci-cyan/30' 
-                : 'text-sci-dim hover:text-sci-cyan hover:bg-sci-cyan/5 border-transparent'
-            } border`}
-            title={isAIPanelOpen ? "隐藏 AI 助手" : "显示 AI 助手"}
-          >
-            <Sparkles size={14} className="group-hover:scale-110 transition-transform" />
-            {!isAIPanelOpen && (
-              <span className="absolute -top-0 -right-0 w-1 h-1 bg-sci-cyan rounded-full animate-pulse shadow-[0_0_8px_rgba(0,243,255,0.8)]"></span>
+          <div className="flex items-center gap-2 ml-auto">
+            {/* 多 IP 操作中心按钮 */}
+            {operations.length > 0 && (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsMultiIPCenterOpen(true)}
+                className={`mt-1 px-2 py-1 rounded-lg transition-all duration-300 group relative flex items-center gap-1.5 text-[10px] font-medium border ${
+                  hasRunningOperation
+                    ? 'text-sci-cyan bg-sci-cyan/10 border-sci-cyan/30 shadow-[0_0_10px_rgba(0,243,255,0.2)]'
+                    : 'text-sci-dim hover:text-sci-cyan hover:bg-sci-cyan/5 border-transparent'
+                }`}
+                title="打开多 IP 操作中心"
+              >
+                {hasRunningOperation ? (
+                  <Activity size={12} className="animate-pulse text-sci-cyan" />
+                ) : (
+                  <Cpu size={12} />
+                )}
+                <span className="hidden sm:inline">
+                  {hasRunningOperation 
+                    ? `执行中 (${operations.filter(op => op.status === 'running').length})` 
+                    : `多 IP (${operations.length})`}
+                </span>
+                {hasRunningOperation && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-sci-cyan rounded-full animate-pulse shadow-[0_0_8px_rgba(0,243,255,0.8)]"></span>
+                )}
+              </motion.button>
             )}
-          </motion.button>
+            
+            {/* AI 助手按钮 */}
+            <motion.button 
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setIsAIPanelOpen(!isAIPanelOpen)}
+              className={`mt-1 p-1 rounded-lg transition-all duration-300 group relative ${
+                isAIPanelOpen 
+                  ? 'text-sci-cyan bg-sci-cyan/10 border-sci-cyan/30' 
+                  : 'text-sci-dim hover:text-sci-cyan hover:bg-sci-cyan/5 border-transparent'
+              } border`}
+              title={isAIPanelOpen ? "隐藏 AI 助手" : "显示 AI 助手"}
+            >
+              <Sparkles size={14} className="group-hover:scale-110 transition-transform" />
+              {!isAIPanelOpen && (
+                <span className="absolute -top-0 -right-0 w-1 h-1 bg-sci-cyan rounded-full animate-pulse shadow-[0_0_8px_rgba(0,243,255,0.8)]"></span>
+              )}
+            </motion.button>
+          </div>
         </div>
         
         {/* Terminal Area */}
@@ -422,6 +521,7 @@ const AISSH: React.FC = () => {
                 activeServerId={activeSessionId} 
                 onInsertCommand={handleInsertCommand} 
                 onSwitchServer={handleSelectServer}
+                onOpenMultiIPCenter={() => setIsMultiIPCenterOpen(true)}
               />
             </motion.div>
           )}
@@ -449,6 +549,12 @@ const AISSH: React.FC = () => {
           onConfirm={handlePasswordConfirm}
         />
       )}
+
+      {/* 多 IP 操作中心弹窗 */}
+      <MultiIPOperationCenter 
+        isOpen={isMultiIPCenterOpen} 
+        onClose={() => setIsMultiIPCenterOpen(false)} 
+      />
     </div>
   );
 };

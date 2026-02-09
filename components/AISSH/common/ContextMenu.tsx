@@ -4,7 +4,7 @@ export interface ContextMenuItem {
   label: string;
   icon?: React.ReactNode;
   onClick: () => void;
-  variant?: 'default' | 'danger';
+  variant?: 'default' | 'danger' | 'primary';
 }
 
 interface ContextMenuProps {
@@ -38,26 +38,48 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
       style={{ left: adjustedX, top: adjustedY }}
     >
       <div className="py-1">
-        {items.map((item, index) => (
-          <button
-            key={index}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-[11px] font-sci uppercase tracking-wider transition-all hover:bg-sci-cyan/10 group
-              ${item.variant === 'danger' ? 'text-sci-red/80 hover:text-sci-red' : 'text-sci-text/80 hover:text-sci-cyan'}
-            `}
-            onClick={(e) => {
-              e.stopPropagation();
-              item.onClick();
-              onClose();
-            }}
-          >
-            {item.icon && (
-              <span className={`shrink-0 transition-colors ${item.variant === 'danger' ? 'group-hover:text-sci-red' : 'group-hover:text-sci-cyan'}`}>
-                {item.icon}
-              </span>
-            )}
-            <span className="flex-1 text-left">{item.label}</span>
-          </button>
-        ))}
+        {items.map((item, index) => {
+          const getVariantClasses = () => {
+            switch (item.variant) {
+              case 'danger':
+                return 'text-sci-red/80 hover:text-sci-red';
+              case 'primary':
+                return 'text-sci-cyan hover:text-sci-cyan bg-sci-cyan/5 hover:bg-sci-cyan/20';
+              default:
+                return 'text-sci-text/80 hover:text-sci-cyan';
+            }
+          };
+          
+          const getIconClasses = () => {
+            switch (item.variant) {
+              case 'danger':
+                return 'group-hover:text-sci-red';
+              case 'primary':
+                return 'text-sci-cyan group-hover:text-sci-cyan';
+              default:
+                return 'group-hover:text-sci-cyan';
+            }
+          };
+          
+          return (
+            <button
+              key={index}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-[11px] font-sci uppercase tracking-wider transition-all hover:bg-sci-cyan/10 group ${getVariantClasses()}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                item.onClick();
+                onClose();
+              }}
+            >
+              {item.icon && (
+                <span className={`shrink-0 transition-colors ${getIconClasses()}`}>
+                  {item.icon}
+                </span>
+              )}
+              <span className="flex-1 text-left">{item.label}</span>
+            </button>
+          );
+        })}
       </div>
       {/* 装饰边角 */}
       <div className="absolute top-0 left-0 w-1 h-1 border-t border-l border-sci-cyan/50"></div>

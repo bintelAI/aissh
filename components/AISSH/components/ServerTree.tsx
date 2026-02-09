@@ -1,12 +1,13 @@
 import React, { useState, useCallback } from 'react';
 import { Server, Folder, ServerTreeProps } from '../types/index';
-import { ChevronRight, ChevronDown, Folder as FolderIcon, Server as ServerIcon, Plus, FolderPlus, Edit3, Trash2, LayoutGrid, Terminal, FileCode, Signal, Activity } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder as FolderIcon, Server as ServerIcon, Plus, FolderPlus, Edit3, Trash2, LayoutGrid, Terminal, FileCode, Signal, Activity, Zap } from 'lucide-react';
 import { ContextMenu, ContextMenuItem } from '../common/ContextMenu';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const ServerTree: React.FC<ServerTreeProps> = ({ 
   servers, folders, activeServerId, onSelectServer, onAddServer, onEditServer, onCloneServer, onDeleteServer, onAddFolder, onEditFolder, onDeleteFolder, onMove, width = 260,
-  onOpenFileManager
+  onOpenFileManager,
+  onBatchConnect
 }) => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
@@ -27,6 +28,26 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
     setEditingFolderId(null);
   };
 
+  // 获取目录下所有服务器（包括子目录）
+  const getAllServersInFolder = useCallback((folderId: string): Server[] => {
+    const result: Server[] = [];
+    const folderIds = new Set<string>();
+    
+    // 递归收集所有子目录ID
+    const collectFolderIds = (parentId: string) => {
+      folderIds.add(parentId);
+      folders.filter(f => f.parentId === parentId).forEach(f => collectFolderIds(f.id));
+    };
+    collectFolderIds(folderId);
+    
+    // 收集所有目录下的服务器
+    folderIds.forEach(id => {
+      result.push(...servers.filter(s => s.parentId === id));
+    });
+    
+    return result;
+  }, [servers, folders]);
+
   const handleContextMenu = useCallback((e: React.MouseEvent, type: 'folder' | 'server', data: Folder | Server) => {
     e.preventDefault();
     e.stopPropagation();
@@ -35,9 +56,26 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
 
     if (type === 'folder') {
       const folder = data as Folder;
+      const folderServers = getAllServersInFolder(folder.id);
+      const connectedCount = folderServers.filter(s => s.status === 'connected').length;
+      const disconnectedServers = folderServers.filter(s => s.status !== 'connected');
+      
       items.push(
         { label: '关联新节点', icon: <Plus size={14}/>, onClick: () => onAddServer(folder.id) },
-        { label: '添加子分区', icon: <FolderPlus size={14}/>, onClick: () => onAddFolder(folder.id) },
+        { label: '添加子分区', icon: <FolderPlus size={14}/>, onClick: () => onAddFolder(folder.id) }
+      );
+      
+      // 添加批量连接选项（如果有未连接的服务器）
+      if (disconnectedServers.length > 0 && onBatchConnect) {
+        items.push({
+          label: `批量连接 (${disconnectedServers.length}台)`,
+          icon: <Zap size={14}/>,
+          onClick: () => onBatchConnect(disconnectedServers.map(s => s.id)),
+          variant: 'primary'
+        });
+      }
+      
+      items.push(
         { label: '重命名', icon: <Edit3 size={14}/>, onClick: () => setEditingFolderId(folder.id) },
         { label: '清除分区', icon: <Trash2 size={14}/>, onClick: () => onDeleteFolder(folder.id), variant: 'danger' }
       );
@@ -53,7 +91,7 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
     }
 
     setContextMenu({ x: e.clientX, y: e.clientY, items });
-  }, [onAddServer, onAddFolder, onDeleteFolder, onSelectServer, onEditServer, onCloneServer, onDeleteServer, onOpenFileManager]);
+  }, [onAddServer, onAddFolder, onDeleteFolder, onSelectServer, onEditServer, onCloneServer, onDeleteServer, onOpenFileManager, onBatchConnect, getAllServersInFolder]);
 
   const handleRootContextMenu = useCallback((e: React.MouseEvent) => {
     if (e.currentTarget !== e.target) return;

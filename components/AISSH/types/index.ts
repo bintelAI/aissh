@@ -92,6 +92,7 @@ export interface ServerTreeProps {
   onMove: (type: 'server' | 'folder', id: string, newParentId: string | null) => void;
   width?: number;
   onOpenFileManager?: (serverId: string) => void;
+  onBatchConnect?: (serverIds: string[]) => void;
 }
 
 export interface CommandTemplate {

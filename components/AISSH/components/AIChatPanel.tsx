@@ -7,7 +7,7 @@ import {
   Send, Sparkles, Zap, BrainCircuit,
   PanelLeftClose, PlusCircle, Terminal as TerminalIcon, Copy, Check, Square,
   PanelLeft, Activity, Settings2, ShieldAlert, Thermometer, Cpu, X, ZapOff,
-  Wand2, ShieldCheck, FileDown, FileUp, Eraser, ChevronDown, History
+  Wand2, ShieldCheck, FileDown, FileUp, Eraser, ChevronDown, History, Trash2
 } from 'lucide-react';
 import { ChatMessage, LogEntry, ChatSession, ExportConfigData, PromptProfile } from '../types/index';
 import { PromptConfigModal } from './PromptConfigModal';
@@ -20,6 +20,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AnimatedText, GlitchText } from '../common/AnimatedText';
 import { AIEmptyState } from './AIEmptyState';
 import { CyberSelect } from '../common/CyberSelect';
+import { IPSelectorInput, SelectedIP } from './IPSelectorInput';
+import { useMultiIPStore } from '../store/useMultiIPStore';
+import { ExecutionMode } from '../types/multiIP';
+import { multiIPAgentService } from '../services/multiIPAgentService';
 
 interface AIChatPanelProps {
   logs: LogEntry[];
@@ -27,6 +31,7 @@ interface AIChatPanelProps {
   onInsertCommand: (command: string) => void;
   onSwitchServer?: (serverId: string) => void;
   onAICommand?: (command: string | null) => void;
+  onOpenMultiIPCenter?: () => void;
 }
 
 export interface AIChatPanelRef {
@@ -34,7 +39,7 @@ export interface AIChatPanelRef {
   createNewSession: (serverId: string) => void;
 }
 
-export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs, activeServerId, onInsertCommand, onSwitchServer, onAICommand }, ref) => {
+export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs, activeServerId, onInsertCommand, onSwitchServer, onAICommand, onOpenMultiIPCenter }, ref) => {
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
     return [{ id: '1', title: '新的运维会话', messages: [], mode: 'chat', createdAt: new Date() }];
   });
@@ -59,6 +64,10 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
   const [copyingId, setCopyingId] = useState<string | null>(null);
   const [copyingCodeId, setCopyingCodeId] = useState<number | null>(null);
   const [isPromptConfigOpen, setIsPromptConfigOpen] = useState(false);
+  const [selectedIPs, setSelectedIPs] = useState<SelectedIP[]>([]);
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>('parallel');
+  
+  const { createOperation, startOperation } = useMultiIPStore();
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -440,6 +449,36 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
     setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: [] } : s));
   };
 
+  const handleDeleteSession = (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('确定要删除此会话吗？此操作不可恢复。')) return;
+    
+    setSessions(prev => {
+      const filtered = prev.filter(s => s.id !== sessionId);
+      // 如果删除的是当前活动会话，切换到其他会话
+      if (sessionId === activeSessionId) {
+        const remainingSessions = filtered.filter(s => s.serverId === activeServerId);
+        if (remainingSessions.length > 0) {
+          setActiveSessionId(remainingSessions[0].id);
+        } else {
+          // 如果没有剩余会话，创建一个新会话
+          const newId = Date.now().toString();
+          const newSession: ChatSession = {
+            id: newId,
+            serverId: activeServerId || undefined,
+            title: '新的运维会话',
+            messages: [],
+            mode: 'chat',
+            createdAt: new Date()
+          };
+          filtered.push(newSession);
+          setActiveSessionId(newId);
+        }
+      }
+      return filtered;
+    });
+  };
+
   const handleExportMarkdown = () => {
     const content = activeSession.messages.map(m => {
       const role = m.role === 'user' ? 'User' : 'Assistant';
@@ -457,7 +496,51 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
   };
 
   const handleSend = () => {
-    if (!input.trim() || isLoading) return;
+    if ((!input.trim() && selectedIPs.length === 0) || isLoading) return;
+    
+    // 如果选择了多个 IP，创建多 IP 操作
+    if (selectedIPs.length > 0) {
+      const operationId = createOperation(
+        input.trim() || '批量执行',
+        `向 ${selectedIPs.length} 台服务器执行指令`,
+        selectedIPs,
+        executionMode
+      );
+      
+      // 添加一条消息到当前会话
+      const multiIPMsg: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: `[多 IP 操作] 目标: ${selectedIPs.length} 台服务器\n指令: ${input || '(AI 自主决策)'}`,
+        timestamp: new Date()
+      };
+      
+      setSessions(prev => prev.map(s => 
+        s.id === activeSessionId 
+          ? { ...s, messages: [...s.messages, multiIPMsg] }
+          : s
+      ));
+      
+      // 打开多 IP 操作中心
+      onOpenMultiIPCenter?.();
+      
+      // 清空输入和选中的 IP
+      setInput('');
+      setSelectedIPs([]);
+      
+      // 启动多 IP 智能执行流程
+      setTimeout(() => {
+        multiIPAgentService.executeTask(operationId, input, (step, operation) => {
+          // 进度回调 - 可以在这里添加实时通知
+          console.log(`[MultiIP] Step ${step.stepNumber} ${step.status}`);
+        }).catch(error => {
+          console.error('[MultiIP] Execution error:', error);
+        });
+      }, 100);
+      
+      return;
+    }
+    
     const text = input;
     setInput('');
     sendAIMessage(text, activeSession.mode === 'action');
@@ -674,11 +757,18 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
                 setActiveSessionId(s.id); 
                 lastProcessedLogRef.current = logs.length; 
               }} 
-              className={`p-3 cursor-pointer text-xs flex flex-col gap-1 border transition-all clip-corner ${activeSessionId === s.id ? 'bg-sci-cyan/10 border-sci-cyan/30 text-sci-cyan font-bold' : 'border-transparent hover:bg-white/5 text-sci-text'}`}
+              className={`p-3 cursor-pointer text-xs flex flex-col gap-1 border transition-all clip-corner group ${activeSessionId === s.id ? 'bg-sci-cyan/10 border-sci-cyan/30 text-sci-cyan font-bold' : 'border-transparent hover:bg-white/5 text-sci-text'}`}
             >
               <div className="flex items-center gap-2">
                  <Activity size={14} className="shrink-0"/> 
                  <span className="truncate flex-1 font-sci uppercase tracking-tight">{s.title}</span>
+                 <button
+                   onClick={(e) => handleDeleteSession(s.id, e)}
+                   className="opacity-0 group-hover:opacity-100 p-1 hover:bg-sci-red/20 text-sci-text/60 hover:text-sci-red rounded transition-all"
+                   title="删除会话"
+                 >
+                   <Trash2 size={12} />
+                 </button>
               </div>
               <div className="flex items-center gap-2 pl-6 text-[9px] text-white/40 font-mono">
                  <span>节点: {s.serverId || 'N/A'}</span>
@@ -911,34 +1001,61 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
               <div className="w-px h-4 bg-white/10 mx-1"></div>
             </div>
           </div>
-          <div className="flex gap-3 items-center">
-            <div className="flex-1 relative group">
-              <textarea 
-                rows={Math.min(input.split('\n').length, 5)}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { 
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { 
-                    e.preventDefault(); 
-                    handleSend(); 
-                  } 
-                }}
-                placeholder={activeSession.mode === 'action' ? "定义任务目标..." : "与 AI 进行通信..."}
-                className="w-full bg-black/40 border border-white/10 text-sci-text p-3 text-[13px] font-mono focus:border-sci-cyan/30 outline-none transition-all clip-corner resize-none placeholder:text-white/60"
-              />
-              <div className="absolute bottom-1 right-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                <span className="text-[9px] font-sci font-bold text-sci-cyan uppercase tracking-widest shadow-[0_0_10px_rgba(0,243,255,0.5)]">Ctrl + Enter 发送</span>
+          {/* 多 IP 模式指示器和控制 */}
+          {selectedIPs.length > 0 && (
+            <div className="flex items-center justify-between mb-2 px-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-sci-cyan font-medium">
+                  多 IP 模式 ({selectedIPs.length} 台)
+                </span>
+                <div className="flex gap-1">
+                  {(['parallel', 'sequential', 'adaptive'] as ExecutionMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setExecutionMode(mode)}
+                      className={`px-2 py-0.5 text-[9px] rounded transition-all ${
+                        executionMode === mode
+                          ? 'bg-sci-cyan/30 text-sci-cyan border border-sci-cyan/50'
+                          : 'bg-black/20 text-sci-dim/60 border border-transparent hover:border-sci-cyan/30'
+                      }`}
+                      title={
+                        mode === 'parallel' ? '所有服务器同时执行' :
+                        mode === 'sequential' ? '逐个服务器执行' :
+                        '根据结果动态调整'
+                      }
+                    >
+                      {mode === 'parallel' && '并行'}
+                      {mode === 'sequential' && '串行'}
+                      {mode === 'adaptive' && '自适应'}
+                    </button>
+                  ))}
+                </div>
               </div>
+            </div>
+          )}
+
+          <div className="flex gap-3 items-start">
+            <div className="flex-1 relative">
+              <IPSelectorInput
+                value={input}
+                onChange={setInput}
+                onSend={handleSend}
+                placeholder={activeSession.mode === 'action' ? "定义任务目标..." : "输入/选择多个 IP 或者 与 AI 进行通信..."}
+                selectedIPs={selectedIPs}
+                onSelectedIPsChange={setSelectedIPs}
+              />
             </div>
             <button 
               onClick={isLoading ? handleStop : handleSend}
-              disabled={!input.trim() && !isLoading}
-              className={`h-[42px] px-6 flex items-center gap-2 font-sci font-bold text-xs uppercase tracking-[0.2em] transition-all clip-corner
+              disabled={!input.trim() && !isLoading && selectedIPs.length === 0}
+              className={`h-[42px] px-6 flex items-center gap-2 font-sci font-bold text-xs uppercase tracking-[0.2em] transition-all clip-corner mt-0
                 ${isLoading 
                   ? 'bg-sci-red/10 border border-sci-red/50 text-sci-red hover:bg-sci-red hover:text-black shadow-[0_0_15px_rgba(255,42,0,0.2)]'
-                  : activeSession.mode === 'action' 
-                    ? 'bg-sci-violet/10 border border-sci-violet/50 text-sci-violet hover:bg-sci-violet hover:text-black shadow-[0_0_15px_rgba(139,92,246,0.2)]' 
-                    : 'bg-sci-cyan/10 border border-sci-cyan/50 text-sci-cyan hover:bg-sci-cyan hover:text-black shadow-[0_0_15px_rgba(0,243,255,0.2)]'}
+                  : selectedIPs.length > 0
+                    ? 'bg-sci-cyan/10 border border-sci-cyan/50 text-sci-cyan hover:bg-sci-cyan hover:text-black shadow-[0_0_15px_rgba(0,243,255,0.2)]'
+                    : activeSession.mode === 'action' 
+                      ? 'bg-sci-violet/10 border border-sci-violet/50 text-sci-violet hover:bg-sci-violet hover:text-black shadow-[0_0_15px_rgba(139,92,246,0.2)]' 
+                      : 'bg-sci-cyan/10 border border-sci-cyan/50 text-sci-cyan hover:bg-sci-cyan hover:text-black shadow-[0_0_15px_rgba(0,243,255,0.2)]'}
                 disabled:opacity-20 disabled:pointer-events-none`}
             >
               {isLoading ? (
