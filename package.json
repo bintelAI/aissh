@@ -3,6 +3,9 @@
   "private": true,
   "version": "2.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
@@ -22,6 +25,7 @@
     "framer-motion": "^12.26.2"
   },
   "devDependencies": {
+        "agentation": "^3.0.2",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/cli": "^2.0.0",
     "@types/node": "^22.14.0",
@@ -38,7 +42,6 @@
     "i18next-browser-languagedetector": "^8.2.0",
     "lucide-react": "0.344.0",
     "monaco-editor": "^0.55.1",
-    "openai": "^6.15.0",
     "postcss": "^8.5.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",

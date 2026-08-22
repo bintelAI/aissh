@@ -4,6 +4,7 @@ import { AgentConfig } from '../types';
 interface AIState {
   agentConfig: AgentConfig;
   setAgentConfig: (config: AgentConfig | ((prev: AgentConfig) => AgentConfig)) => void;
+  hydrateConfiguration: (config: Partial<AgentConfig>) => void;
 }
 
 const DEFAULT_PROMPT = `
@@ -37,24 +38,14 @@ const getInitialConfig = (): AgentConfig => {
     maxAttempts: 15,
     customPrompt: DEFAULT_PROMPT,
     safeMode: true,
-    model: 'qwen-max',
     temperature: 0.7,
     autoSyncTerminal: false,
-    useCustomModel: false,
     customUrl: '',
     customKey: '',
     customModelName: '',
     maxMemoryMessages: 10
   };
 
-  const saved = localStorage.getItem('ssh_agent_config');
-  if (saved) {
-    try {
-      return { ...defaultConfig, ...JSON.parse(saved) };
-    } catch (e) {
-      console.error('Failed to parse agent config', e);
-    }
-  }
   return defaultConfig;
 };
 
@@ -62,7 +53,13 @@ export const useAIStore = create<AIState>((set) => ({
   agentConfig: getInitialConfig(),
   setAgentConfig: (config) => set((state) => {
     const nextConfig = typeof config === 'function' ? config(state.agentConfig) : config;
-    localStorage.setItem('ssh_agent_config', JSON.stringify(nextConfig));
     return { agentConfig: nextConfig };
+  }),
+  hydrateConfiguration: (config) => set((state) => {
+    const { model: _model, useCustomModel: _useCustomModel, ...openAiConfig } = config as Partial<AgentConfig> & {
+      model?: unknown;
+      useCustomModel?: unknown;
+    };
+    return { agentConfig: { ...state.agentConfig, ...openAiConfig, customKey: '' } };
   }),
 }));

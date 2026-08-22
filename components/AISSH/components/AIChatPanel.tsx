@@ -9,21 +9,39 @@ import {
   PanelLeft, Activity, Settings2, ShieldAlert, Thermometer, Cpu, X, ZapOff,
   Wand2, ShieldCheck, FileDown, FileUp, Eraser, ChevronDown, History, Trash2
 } from 'lucide-react';
-import { ChatMessage, LogEntry, ChatSession, ExportConfigData, PromptProfile } from '../types/index';
+import { AgentConfig, ChatMessage, LogEntry, ChatSession, ExportConfigData, PromptProfile, Server } from '../types/index';
 import { PromptConfigModal } from './PromptConfigModal';
 import { usePromptStore } from '../store/usePromptStore';
 import { useAIStore } from '../store/useAIStore';
 import { useSSHStore } from '../store/useSSHStore';
 import { chatWithAIStream, runAutonomousTask } from '../services/geminiService';
+import { saveApiKey } from '../services/aiClient';
+import {
+  clearAiMessages,
+  createAiMessage,
+  createAiSession,
+  deleteAiSession,
+  listAiMessages,
+  listAiSessions,
+  updateAiMessage,
+  updateAiSession,
+} from '../services/aiSessionService';
 import { sshManager } from '../services/sshService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AnimatedText, GlitchText } from '../common/AnimatedText';
 import { AIEmptyState } from './AIEmptyState';
-import { CyberSelect } from '../common/CyberSelect';
 import { IPSelectorInput, SelectedIP } from './IPSelectorInput';
 import { useMultiIPStore } from '../store/useMultiIPStore';
 import { ExecutionMode } from '../types/multiIP';
 import { multiIPAgentService } from '../services/multiIPAgentService';
+import {
+  exportConfiguration,
+  importConfiguration,
+  saveConfigurationExport,
+  toPersistedAgentConfig,
+  toPersistedOperations,
+  toPersistedServer,
+} from '../services/configurationPersistence';
 
 interface AIChatPanelProps {
   logs: LogEntry[];
@@ -36,16 +54,23 @@ interface AIChatPanelProps {
 
 export interface AIChatPanelRef {
   triggerExternalPrompt: (text: string) => void;
-  createNewSession: (serverId: string) => void;
+  createNewSession: (serverId: string) => Promise<void>;
 }
 
 export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs, activeServerId, onInsertCommand, onSwitchServer, onAICommand, onOpenMultiIPCenter }, ref) => {
-  const [sessions, setSessions] = useState<ChatSession[]>(() => {
-    return [{ id: '1', title: '新的运维会话', messages: [], mode: 'chat', createdAt: new Date() }];
-  });
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
 
   const { agentConfig, setAgentConfig } = useAIStore();
-  const { servers, setServers, folders, setFolders, commandTemplates, setCommandTemplates } = useSSHStore();
+  const {
+    servers,
+    setServers,
+    folders,
+    setFolders,
+    commandTemplates,
+    setCommandTemplates,
+    commandHistory,
+    setCommandHistory,
+  } = useSSHStore();
   const { 
     promptTree, 
     setPromptTree,
@@ -56,7 +81,7 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
     deselectPrompt
   } = usePromptStore();
 
-  const [activeSessionId, setActiveSessionId] = useState<string>(sessions[0]?.id || '1');
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -67,7 +92,7 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
   const [selectedIPs, setSelectedIPs] = useState<SelectedIP[]>([]);
   const [executionMode, setExecutionMode] = useState<ExecutionMode>('parallel');
   
-  const { createOperation, startOperation } = useMultiIPStore();
+  const { createOperation, startOperation, operations, hydrateOperations } = useMultiIPStore();
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -76,98 +101,111 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
   const lastProcessedLogRef = useRef<number>(-1);
 
   const confirmationResolverRef = useRef<((val: boolean) => void) | null>(null);
+  const loadRequestRef = useRef(0);
 
-  // 监听 activeServerId 变化，自动切换或创建对应的会话
+  // The database is the source of truth for every persisted AI session.
   useEffect(() => {
-    if (!activeServerId) return;
-
-    const existingSession = sessions.find(s => s.serverId === activeServerId);
-    
-    if (existingSession) {
-      if (existingSession.id !== activeSessionId) {
-        setActiveSessionId(existingSession.id);
-      }
-    } else {
-      // 创建新会话
-      const newId = Date.now().toString();
-      const server = servers.find(s => s.id === activeServerId);
-      const newSession: ChatSession = {
-        id: newId,
-        serverId: activeServerId,
-        title: `运维会话: ${server?.name || activeServerId}`,
-        messages: [],
-        mode: 'chat',
-        createdAt: new Date()
-      };
-      setSessions(prev => [newSession, ...prev]);
-      setActiveSessionId(newId);
-      lastProcessedLogRef.current = logs.length;
+    if (!activeServerId) {
+      setSessions([]);
+      setActiveSessionId(null);
+      return;
     }
-  }, [activeServerId, servers, logs.length]);
-
-  const handleExportConfig = () => {
-    const data: ExportConfigData = {
-      version: '2.0.0',
-      exportDate: new Date().toISOString(),
-      agentConfig,
-      servers,
-      folders,
-      commandTemplates,
-      // 新版树形结构
-      promptTree,
-      selectedPromptIds
+    const requestId = ++loadRequestRef.current;
+    const loadSessions = async () => {
+      try {
+        let loadedSessions = await listAiSessions(activeServerId);
+        if (loadedSessions.length === 0) {
+          const server = servers.find((item) => item.id === activeServerId);
+          loadedSessions = [await createAiSession({
+            serverId: activeServerId,
+            title: `运维会话: ${server?.name || activeServerId}`,
+            mode: 'chat',
+          })];
+        }
+        const sessionsWithMessages = await Promise.all(loadedSessions.map(async (session) => ({
+          ...session,
+          messages: await listAiMessages(session.id),
+        })));
+        if (requestId !== loadRequestRef.current) return;
+        setSessions(sessionsWithMessages);
+        setActiveSessionId(sessionsWithMessages[0].id);
+        lastProcessedLogRef.current = logs.length;
+      } catch (error) {
+        console.error('Failed to load AI sessions:', error);
+        if (requestId !== loadRequestRef.current) return;
+        setSessions([]);
+        setActiveSessionId(null);
+        alert(`AI 会话加载失败：${error instanceof Error ? error.message : '本地数据服务不可用'}`);
+      }
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `gemini-ssh-config-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    void loadSessions();
+  }, [activeServerId]);
+
+  const handleExportConfig = async () => {
+    try {
+      const snapshot = await exportConfiguration();
+      const data: ExportConfigData = {
+        version: '2.0.0',
+        exportDate: new Date().toISOString(),
+        agentConfig: snapshot.agentConfig as AgentConfig,
+        servers: snapshot.servers.map(server => ({ ...server, status: 'disconnected' })) as Server[],
+        folders: snapshot.folders,
+        commandTemplates: snapshot.commandTemplates,
+        promptTree: snapshot.promptTree,
+        selectedPromptIds: snapshot.selectedPromptIds,
+        commandHistory: snapshot.commandHistory,
+        operations: snapshot.operations,
+      };
+      const fileName = `gemini-ssh-config-${new Date().toISOString().slice(0, 10)}.json`;
+      const result = await saveConfigurationExport(fileName, JSON.stringify(data, null, 2));
+      if (!result.canceled) alert('配置备份已导出（不包含密码、私钥和 AI Key）。');
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('导出失败：本地数据服务不可用');
+    }
   };
 
-  const handleImportConfig = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportConfig = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const data: ExportConfigData = JSON.parse(event.target?.result as string);
-        
-        // 导入基本配置
-        if (data.agentConfig) setAgentConfig(data.agentConfig);
-        if (data.servers) setServers(data.servers);
-        if (data.folders) setFolders(data.folders);
-        if (data.commandTemplates) setCommandTemplates(data.commandTemplates);
-        
-        // 处理提示语配置（兼容新旧版本）
-        if (data.promptTree) {
-          // 新版：直接导入树形结构
-          setPromptTree(data.promptTree);
-          if (data.selectedPromptIds) {
-            setSelectedPromptIds(data.selectedPromptIds);
-          }
-        } else if (data.promptProfiles) {
-          // 旧版：将扁平结构转换为树形结构
-          const migratedTree = migrateProfilesToTree(data.promptProfiles);
-          setPromptTree(migratedTree);
-          // 默认选中第一个提示语
-          const firstPrompt = migratedTree.find(n => n.type === 'prompt');
-          if (firstPrompt) {
-            setSelectedPromptIds([firstPrompt.id]);
-          }
-        }
-        
-        alert('配置导入成功！');
+
+        if (!window.confirm('导入会先自动备份当前配置，再覆盖本机 SQLite 数据，是否继续？')) return;
+        const importedPromptTree = data.promptTree ?? (data.promptProfiles ? migrateProfilesToTree(data.promptProfiles) : promptTree);
+        const importedSelectedPromptIds = data.selectedPromptIds ?? (
+          data.promptProfiles ? importedPromptTree.filter(node => node.type === 'prompt').slice(0, 1).map(node => node.id) : selectedPromptIds
+        );
+        const saved = await importConfiguration({
+          folders: data.folders ?? folders,
+          servers: (data.servers ?? servers).map(toPersistedServer),
+          commandTemplates: data.commandTemplates ?? commandTemplates,
+          promptTree: importedPromptTree,
+          selectedPromptIds: importedSelectedPromptIds,
+          agentConfig: toPersistedAgentConfig(data.agentConfig ?? agentConfig),
+          commandHistory: data.commandHistory ?? commandHistory,
+          operations: toPersistedOperations(data.operations ?? operations),
+        });
+
+        setServers(saved.servers.map((server) => ({ ...server, status: 'disconnected' })));
+        setFolders(saved.folders);
+        setCommandTemplates(saved.commandTemplates);
+        setCommandHistory(saved.commandHistory);
+        setPromptTree(saved.promptTree);
+        setSelectedPromptIds(saved.selectedPromptIds);
+        setAgentConfig(saved.agentConfig as AgentConfig);
+        hydrateOperations(saved.operations);
+        alert('配置导入成功，当前连接凭据需要重新输入。');
       } catch (err) {
         console.error('Import failed:', err);
-        alert('导入失败：无效的配置文件');
+        alert(`导入失败：${err instanceof Error ? err.message : '无效的配置文件'}`);
       }
     };
     reader.readAsText(file);
+    e.target.value = '';
   };
 
   // 辅助函数：将旧版扁平结构迁移为树形结构
@@ -195,26 +233,24 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
     return [migratedFolder, ...migratedNodes];
   };
 
-  const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
+  const activeSession: ChatSession = sessions.find(s => s.id === activeSessionId) || sessions[0] || {
+    id: '',
+    serverId: activeServerId || undefined,
+    title: '正在加载会话',
+    messages: [],
+    mode: 'chat',
+    createdAt: new Date(),
+  };
   
-  const modelOptions = [
-    { value: 'gemini-3-pro-preview', label: '量子核心 (高智能)' },
-    { value: 'gemini-3-flash-preview', label: '神经闪速 (高速度)' },
-  ];
-
-  const createNewSession = (serverId: string) => {
-    const newId = Date.now().toString();
+  const createNewSession = async (serverId: string) => {
     const server = servers.find(s => s.id === serverId);
-    const newSession: ChatSession = {
-      id: newId,
-      serverId: serverId,
+    const newSession = await createAiSession({
+      serverId,
       title: `运维会话: ${server?.name || serverId}`,
-      messages: [],
       mode: 'chat',
-      createdAt: new Date()
-    };
+    });
     setSessions(prev => [newSession, ...prev]);
-    setActiveSessionId(newId);
+    setActiveSessionId(newSession.id);
     lastProcessedLogRef.current = logs.length;
   };
 
@@ -225,12 +261,6 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
     },
     createNewSession
   }));
-
-  // 不再持久化对话会话到 localStorage，确保每次初始化刷新时列表都是空的
-  useEffect(() => {
-    // 清理旧的持久化数据，确保之后也不会误读
-    localStorage.removeItem('ssh_ai_sessions');
-  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -280,31 +310,66 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
   }, [logs, activeSession.mode, agentConfig.autoSyncTerminal, activeServerId, isLoading]);
 
   const sendAIMessage = async (text: string, isAction: boolean = false) => {
+    if (!activeSessionId) return;
     stopSignalRef.current = false;
     const currentSessionId = activeSessionId; // Capture current session ID
-    
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text, timestamp: new Date() };
-    
-    setSessions(prev => prev.map(s => s.id === currentSessionId ? { 
-      ...s, 
+
+    let userMsg: ChatMessage;
+    try {
+      userMsg = await createAiMessage(currentSessionId, { role: 'user', content: text });
+    } catch (error) {
+      console.error('Failed to persist user message:', error);
+      alert(`消息保存失败：${error instanceof Error ? error.message : '本地数据服务不可用'}`);
+      return;
+    }
+
+    const currentSession = sessions.find(s => s.id === currentSessionId);
+    const nextTitle = currentSession?.messages.length === 0
+      ? (text.length > 20 ? text.slice(0, 20) + '...' : text)
+      : currentSession?.title;
+    if (nextTitle && currentSession && nextTitle !== currentSession.title) {
+      try {
+        const updated = await updateAiSession(currentSessionId, { title: nextTitle });
+        setSessions(prev => prev.map(s => s.id === currentSessionId ? {
+          ...s,
+          title: updated.title,
+          mode: updated.mode,
+          updatedAt: updated.updatedAt,
+        } : s));
+      } catch (error) {
+        console.error('Failed to update AI session title:', error);
+      }
+    }
+
+    setSessions(prev => prev.map(s => s.id === currentSessionId ? {
+      ...s,
       messages: [...s.messages, userMsg],
-      title: s.messages.length === 0 ? (text.length > 20 ? text.slice(0, 20) + '...' : text) : s.title 
+      title: nextTitle || s.title,
     } : s));
-    
     setIsLoading(true);
 
     if (isAction) {
       await handleAgentWorkflow(text, currentSessionId);
     } else {
-      const aiMsgId = (Date.now() + 1).toString();
+      let assistantMsg: ChatMessage;
+      try {
+        assistantMsg = await createAiMessage(currentSessionId, { role: 'assistant', content: '' });
+      } catch (error) {
+        console.error('Failed to create assistant placeholder:', error);
+        setIsLoading(false);
+        setSessions(prev => prev.map(s => s.id === currentSessionId ? {
+          ...s,
+          messages: [...s.messages, { id: `error-${Date.now()}`, role: 'assistant', content: `⚠️ 消息占位保存失败：${error instanceof Error ? error.message : '本地数据服务不可用'}`, timestamp: new Date() }],
+        } : s));
+        return;
+      }
+      const aiMsgId = assistantMsg.id;
       setSessions(prev => prev.map(s => s.id === currentSessionId ? {
         ...s,
-        messages: [...s.messages, { id: aiMsgId, role: 'assistant', content: '', timestamp: new Date() }]
+        messages: [...s.messages, assistantMsg]
       } : s));
 
       let fullContent = "";
-      // Get the latest messages for context from the session we are working on
-      const currentSession = sessions.find(s => s.id === currentSessionId);
       const historyForAI = [...(currentSession?.messages || []), userMsg];
 
       try {
@@ -315,12 +380,19 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
             messages: s.messages.map(m => m.id === aiMsgId ? { ...m, content: fullContent } : m)
           } : s));
         }, () => stopSignalRef.current);
+        await updateAiMessage(currentSessionId, aiMsgId, fullContent);
       } catch (error) {
         console.error('AI Stream Error:', error);
+        const errorContent = fullContent + `\n\n⚠️ **通信中断或模型响应错误**: ${error instanceof Error ? error.message : '未知错误'}`;
         setSessions(prev => prev.map(s => s.id === currentSessionId ? {
           ...s,
-          messages: s.messages.map(m => m.id === aiMsgId ? { ...m, content: fullContent + '\n\n⚠️ **通信中断或模型响应错误**' } : m)
+          messages: s.messages.map(m => m.id === aiMsgId ? { ...m, content: errorContent } : m)
         } : s));
+        try {
+          await updateAiMessage(currentSessionId, aiMsgId, errorContent);
+        } catch (persistError) {
+          console.error('Failed to persist AI error message:', persistError);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -343,44 +415,51 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
       });
     };
 
+    let workflowMessages = sessions.find(s => s.id === targetSessionId)?.messages || [];
     const stepHandler = async (step: any) => {
-      setSessions(prev => {
-        const session = prev.find(s => s.id === targetSessionId);
-        if (!session) return prev;
+      const lastMsg = workflowMessages[workflowMessages.length - 1];
+      const content = step.isDone
+        ? `### 🏁 任务完成\n${step.summary || ''}`
+        : `**💡 思考**: ${step.thought}\n\n${step.command ? `**🚀 执行命令**: \`${step.command}\`` : ''}`;
 
-        const lastMsg = session.messages[session.messages.length - 1];
-        
-        // 支持流式更新 Summary：如果当前 step 完成且最后一条消息也是完成状态，则更新它
-        if (step.isDone && lastMsg && lastMsg.isDone) {
-             const updatedMsg = { 
-               ...lastMsg, 
-               content: `### 🏁 任务完成\n${step.summary}`, 
-               summary: step.summary 
-             };
-             return prev.map(s => s.id === targetSessionId ? { ...s, messages: [...s.messages.slice(0, -1), updatedMsg] } : s);
-        }
-
-        const msgId = Date.now().toString();
-        const stepMsg: ChatMessage = {
-          id: msgId,
-          role: 'assistant',
-          content: step.isDone 
-            ? `### 🏁 任务完成\n${step.summary}` 
-            : `**💡 思考**: ${step.thought}\n\n${step.command ? `**🚀 执行命令**: \`${step.command}\`` : ''}`,
-          timestamp: new Date(),
-          isThought: !step.isDone,
-          isPendingConfirmation: step.requiresConfirmation,
-          commandToExecute: step.command,
-          confirmationStatus: step.requiresConfirmation ? 'pending' : undefined,
-          isDone: step.isDone,
-          summary: step.summary
-        };
-
-        return prev.map(s => s.id === targetSessionId ? {
+      if (step.isDone && lastMsg?.isDone) {
+        const updatedMessage = await updateAiMessage(targetSessionId, lastMsg.id, content);
+        setSessions(prev => prev.map(s => s.id === targetSessionId ? {
           ...s,
-          messages: [...s.messages, stepMsg]
-        } : s);
+          messages: s.messages.map(message => message.id === lastMsg.id ? {
+            ...message,
+            ...updatedMessage,
+            isDone: true,
+            summary: step.summary,
+          } : message),
+        } : s));
+        workflowMessages = workflowMessages.map(message => message.id === lastMsg.id ? {
+          ...message,
+          ...updatedMessage,
+          isDone: true,
+          summary: step.summary,
+        } : message);
+        return;
+      }
+
+      const stepMsg = await createAiMessage(targetSessionId, {
+        role: 'assistant',
+        content,
       });
+      const renderedStep = {
+        ...stepMsg,
+        isThought: !step.isDone,
+        isPendingConfirmation: step.requiresConfirmation,
+        commandToExecute: step.command,
+        confirmationStatus: step.requiresConfirmation ? 'pending' as const : undefined,
+        isDone: step.isDone,
+        summary: step.summary,
+      };
+      workflowMessages = [...workflowMessages, renderedStep];
+      setSessions(prev => prev.map(s => s.id === targetSessionId ? {
+        ...s,
+        messages: [...s.messages, renderedStep],
+      } : s));
     };
 
     (stepHandler as any).execute = async (cmd: string) => {
@@ -425,58 +504,58 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
     }
   };
 
-  const handleNewSession = () => {
+  const handleNewSession = async () => {
     if (!activeServerId) {
       alert("请先选择一个服务器");
       return;
     }
-    const newId = Date.now().toString();
-    const newSession: ChatSession = {
-      id: newId,
-      serverId: activeServerId,
-      title: `新会话 ${new Date().toLocaleTimeString()}`,
-      messages: [],
-      mode: 'chat',
-      createdAt: new Date()
-    };
-    setSessions(prev => [newSession, ...prev]);
-    setActiveSessionId(newId);
-    lastProcessedLogRef.current = logs.length;
+    try {
+      const newSession = await createAiSession({
+        serverId: activeServerId,
+        title: `新会话 ${new Date().toLocaleTimeString()}`,
+        mode: 'chat',
+      });
+      setSessions(prev => [newSession, ...prev]);
+      setActiveSessionId(newSession.id);
+      lastProcessedLogRef.current = logs.length;
+    } catch (error) {
+      alert(`创建会话失败：${error instanceof Error ? error.message : '本地数据服务不可用'}`);
+    }
   };
 
-  const handleClearSession = () => {
+  const handleClearSession = async () => {
     if (!confirm('确定要清空当前会话记录吗？')) return;
-    setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: [] } : s));
+    if (!activeSessionId) return;
+    try {
+      await clearAiMessages(activeSessionId);
+      setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: [] } : s));
+    } catch (error) {
+      alert(`清空会话失败：${error instanceof Error ? error.message : '本地数据服务不可用'}`);
+    }
   };
 
-  const handleDeleteSession = (sessionId: string, e: React.MouseEvent) => {
+  const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('确定要删除此会话吗？此操作不可恢复。')) return;
-    
-    setSessions(prev => {
-      const filtered = prev.filter(s => s.id !== sessionId);
-      // 如果删除的是当前活动会话，切换到其他会话
+    try {
+      await deleteAiSession(sessionId);
+      const remainingSessions = sessions.filter(s => s.id !== sessionId);
       if (sessionId === activeSessionId) {
-        const remainingSessions = filtered.filter(s => s.serverId === activeServerId);
         if (remainingSessions.length > 0) {
           setActiveSessionId(remainingSessions[0].id);
+        } else if (activeServerId) {
+          const replacement = await createAiSession({ serverId: activeServerId, title: '新的运维会话', mode: 'chat' });
+          setSessions([replacement]);
+          setActiveSessionId(replacement.id);
+          return;
         } else {
-          // 如果没有剩余会话，创建一个新会话
-          const newId = Date.now().toString();
-          const newSession: ChatSession = {
-            id: newId,
-            serverId: activeServerId || undefined,
-            title: '新的运维会话',
-            messages: [],
-            mode: 'chat',
-            createdAt: new Date()
-          };
-          filtered.push(newSession);
-          setActiveSessionId(newId);
+          setActiveSessionId(null);
         }
       }
-      return filtered;
-    });
+      setSessions(remainingSessions);
+    } catch (error) {
+      alert(`删除会话失败：${error instanceof Error ? error.message : '本地数据服务不可用'}`);
+    }
   };
 
   const handleExportMarkdown = () => {
@@ -495,7 +574,7 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
     URL.revokeObjectURL(url);
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if ((!input.trim() && selectedIPs.length === 0) || isLoading) return;
     
     // 如果选择了多个 IP，创建多 IP 操作
@@ -507,19 +586,15 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
         executionMode
       );
       
-      // 添加一条消息到当前会话
-      const multiIPMsg: ChatMessage = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: `[多 IP 操作] 目标: ${selectedIPs.length} 台服务器\n指令: ${input || '(AI 自主决策)'}`,
-        timestamp: new Date()
-      };
-      
-      setSessions(prev => prev.map(s => 
-        s.id === activeSessionId 
-          ? { ...s, messages: [...s.messages, multiIPMsg] }
-          : s
-      ));
+      if (!activeSessionId) return;
+      const multiIPContent = `[多 IP 操作] 目标: ${selectedIPs.length} 台服务器\n指令: ${input || '(AI 自主决策)'}`;
+      try {
+        const multiIPMsg = await createAiMessage(activeSessionId, { role: 'user', content: multiIPContent });
+        setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, multiIPMsg] } : s));
+      } catch (error) {
+        alert(`多 IP 操作消息保存失败：${error instanceof Error ? error.message : '本地数据服务不可用'}`);
+        return;
+      }
       
       // 打开多 IP 操作中心
       onOpenMultiIPCenter?.();
@@ -947,10 +1022,21 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
             <div className="flex bg-black/40 p-1 border border-white/5 gap-1 clip-corner shrink-0">
               <div className="group relative">
                 <button 
-                  onClick={() => {
-                    setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, mode: 'chat' } : s));
-                    lastProcessedLogRef.current = logs.length - 1;
-                  }} 
+                  onClick={async () => {
+                    if (!activeSessionId || activeSession.mode === 'chat') return;
+                    try {
+                      const updated = await updateAiSession(activeSessionId, { mode: 'chat' });
+                      setSessions(prev => prev.map(s => s.id === activeSessionId ? {
+                        ...s,
+                        title: updated.title,
+                        mode: updated.mode,
+                        updatedAt: updated.updatedAt,
+                      } : s));
+                      lastProcessedLogRef.current = logs.length - 1;
+                    } catch (error) {
+                      alert(`切换聊天模式失败：${error instanceof Error ? error.message : '本地数据服务不可用'}`);
+                    }
+                  }}
                   className={`h-7 px-3 flex items-center justify-center transition-all ${activeSession.mode === 'chat' ? 'bg-sci-cyan text-black font-bold' : 'bg-transparent text-sci-text hover:text-sci-cyan'}`}
                 >
                   <Zap size={12}/>
@@ -960,7 +1046,20 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
               </div>
               <div className="group relative">
                 <button 
-                  onClick={() => setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, mode: 'action' } : s))} 
+                  onClick={async () => {
+                    if (!activeSessionId || activeSession.mode === 'action') return;
+                    try {
+                      const updated = await updateAiSession(activeSessionId, { mode: 'action' });
+                      setSessions(prev => prev.map(s => s.id === activeSessionId ? {
+                        ...s,
+                        title: updated.title,
+                        mode: updated.mode,
+                        updatedAt: updated.updatedAt,
+                      } : s));
+                    } catch (error) {
+                      alert(`切换 Agent 模式失败：${error instanceof Error ? error.message : '本地数据服务不可用'}`);
+                    }
+                  }}
                   className={`h-7 px-3 flex items-center justify-center transition-all ${activeSession.mode === 'action' ? 'bg-sci-violet text-black font-bold' : 'bg-transparent text-sci-text hover:text-sci-violet'}`}
                 >
                   <BrainCircuit size={12}/>
@@ -1076,7 +1175,7 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
 
       {isSettingsOpen && createPortal(
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="w-full max-w-md bg-sci-obsidian border border-sci-cyan/30 shadow-[0_0_50px_rgba(0,243,255,0.1)] clip-corner overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="w-full max-w-md bg-sci-obsidian border border-sci-cyan/30 drop-shadow-[0_0_40px_rgba(0,243,255,0.18)] clip-corner overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-white/10 flex items-center justify-between bg-sci-panel/50">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-sci-cyan/10 border border-sci-cyan/30 text-sci-cyan"><BrainCircuit size={20}/></div>
@@ -1175,78 +1274,46 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-sci font-bold text-sci-text uppercase tracking-widest flex items-center gap-2">
-                    <Cpu size={14} className="text-sci-cyan"/> 认知模型
+                    <Cpu size={14} className="text-sci-cyan"/> OpenAI 兼容模型
                   </label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] text-white/40 uppercase font-bold">自定义</span>
-                    <button 
-                      onClick={() => setAgentConfig({...agentConfig, useCustomModel: !agentConfig.useCustomModel})}
-                      className={`w-10 h-5 rounded-full relative transition-colors ${agentConfig.useCustomModel ? 'bg-sci-cyan' : 'bg-white/10'}`}
-                    >
-                      <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${agentConfig.useCustomModel ? 'left-6' : 'left-1'}`}></div>
-                    </button>
-                  </div>
                 </div>
 
-                {!agentConfig.useCustomModel ? (
-                  <CyberSelect 
-                    value={agentConfig.model} 
-                    onChange={val => setAgentConfig({...agentConfig, model: val as any})}
-                    options={modelOptions}
-                    variant="cyan"
-                    width="100%"
-                  />
-                ) : (
-                  <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="grid grid-cols-2 gap-2 mb-2">
-                      <button 
-                        onClick={() => setAgentConfig({
-                          ...agentConfig, 
-                          customUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-                          customModelName: 'qwen-plus',
-                          useCustomModel: true
-                        })}
-                        className="py-1.5 px-2 bg-sci-cyan/10 border border-sci-cyan/30 text-[10px] text-sci-cyan hover:bg-sci-cyan hover:text-black transition-all clip-corner font-sci font-bold"
-                      >
-                        阿里通义 (Qwen)
-                      </button>
-                      <button 
-                        onClick={() => setAgentConfig({
-                          ...agentConfig, 
-                          customUrl: 'https://api.deepseek.com/v1',
-                          customModelName: 'deepseek-chat',
-                          useCustomModel: true
-                        })}
-                        className="py-1.5 px-2 bg-sci-violet/10 border border-sci-violet/30 text-[10px] text-sci-violet hover:bg-sci-violet hover:text-black transition-all clip-corner font-sci font-bold"
-                      >
-                        DeepSeek
-                      </button>
-                    </div>
-                    <div className="space-y-2">
-                      <input 
-                        type="text" 
-                        placeholder="API Endpoint (URL)" 
-                        value={agentConfig.customUrl || ''}
-                        onChange={e => setAgentConfig({...agentConfig, customUrl: e.target.value})}
-                        className="w-full bg-black/40 border border-white/10 text-sci-text px-3 py-2 text-[11px] font-mono focus:border-sci-cyan/30 outline-none transition-all clip-corner"
-                      />
-                      <input 
-                        type="password" 
-                        placeholder="API Key" 
-                        value={agentConfig.customKey || ''}
-                        onChange={e => setAgentConfig({...agentConfig, customKey: e.target.value})}
-                        className="w-full bg-black/40 border border-white/10 text-sci-text px-3 py-2 text-[11px] font-mono focus:border-sci-cyan/30 outline-none transition-all clip-corner"
-                      />
-                      <input 
-                        type="text" 
-                        placeholder="Model Name" 
-                        value={agentConfig.customModelName || ''}
-                        onChange={e => setAgentConfig({...agentConfig, customModelName: e.target.value})}
-                        className="w-full bg-black/40 border border-white/10 text-sci-text px-3 py-2 text-[11px] font-mono focus:border-sci-cyan/30 outline-none transition-all clip-corner"
-                      />
-                    </div>
+                <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <p className="text-[9px] text-white/40 font-sci">支持所有 OpenAI API 兼容服务</p>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="OpenAI 兼容 API 地址"
+                      value={agentConfig.customUrl || ''}
+                      onChange={e => setAgentConfig({...agentConfig, customUrl: e.target.value})}
+                      className="w-full bg-black/40 border border-white/10 text-sci-text px-3 py-2 text-[11px] font-mono focus:border-sci-cyan/30 outline-none transition-all clip-corner"
+                    />
+                    <input
+                      type="password"
+                      placeholder="API Key"
+                      value={agentConfig.customKey || ''}
+                      onChange={e => setAgentConfig({...agentConfig, customKey: e.target.value})}
+                      onBlur={async () => {
+                        const apiKey = agentConfig.customKey?.trim();
+                        if (!apiKey) return;
+                        try {
+                          await saveApiKey(apiKey);
+                          setAgentConfig((current) => ({ ...current, customKey: '' }));
+                        } catch (error) {
+                          console.error('Failed to save AI API key:', error);
+                        }
+                      }}
+                      className="w-full bg-black/40 border border-white/10 text-sci-text px-3 py-2 text-[11px] font-mono focus:border-sci-cyan/30 outline-none transition-all clip-corner"
+                    />
+                    <input
+                      type="text"
+                      placeholder="模型名（如 gpt-4o）"
+                      value={agentConfig.customModelName || ''}
+                      onChange={e => setAgentConfig({...agentConfig, customModelName: e.target.value})}
+                      className="w-full bg-black/40 border border-white/10 text-sci-text px-3 py-2 text-[11px] font-mono focus:border-sci-cyan/30 outline-none transition-all clip-corner"
+                    />
                   </div>
-                )}
+                </div>
               </div>
 
               <div className="space-y-3">

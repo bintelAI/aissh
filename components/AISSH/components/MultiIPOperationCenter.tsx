@@ -250,7 +250,7 @@ export const MultiIPOperationCenter: React.FC<MultiIPOperationCenterProps> = ({
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         className="w-[90vw] h-[85vh] bg-sci-obsidian border border-sci-cyan/30 
-                   shadow-[0_0_50px_rgba(0,243,255,0.15)] flex flex-col clip-corner"
+                   drop-shadow-[0_0_40px_rgba(0,243,255,0.22)] flex flex-col clip-corner"
       >
         {/* 头部 */}
         <div className="flex items-center justify-between px-6 py-4 

@@ -1,9 +1,5 @@
 import { create } from 'zustand';
-import { PromptNode, PromptNodeType, HighlightRule, PromptProfile } from '../types';
-
-const LS_TREE_KEY = 'ssh_prompt_tree_v2';
-const LS_SELECTED_KEY = 'ssh_selected_prompt_ids_v2';
-const LS_LEGACY_PROFILES_KEY = 'ssh_prompt_profiles';
+import { PromptNode, PromptNodeType, HighlightRule } from '../types';
 
 // 默认树形结构
 const defaultTree: PromptNode[] = [
@@ -108,67 +104,6 @@ const defaultTree: PromptNode[] = [
   }
 ];
 
-// 从旧版配置迁移
-const migrateFromLegacy = (): PromptNode[] => {
-  const saved = localStorage.getItem(LS_LEGACY_PROFILES_KEY);
-  if (!saved) return defaultTree;
-
-  try {
-    const profiles: PromptProfile[] = JSON.parse(saved);
-    if (!Array.isArray(profiles) || profiles.length === 0) return defaultTree;
-
-    // 创建迁移文件夹
-    const migratedFolder: PromptNode = {
-      id: 'folder-migrated',
-      name: '已迁移配置',
-      type: 'folder',
-      parentId: null,
-      order: 0,
-      isExpanded: true
-    };
-
-    // 转换旧配置为树形节点
-    const migratedNodes: PromptNode[] = profiles.map((profile, index) => ({
-      id: profile.id,
-      name: profile.name,
-      type: 'prompt',
-      parentId: 'folder-migrated',
-      order: index,
-      deviceType: profile.deviceType,
-      prompt: profile.prompt,
-      rules: profile.rules
-    }));
-
-    return [migratedFolder, ...migratedNodes];
-  } catch {
-    return defaultTree;
-  }
-};
-
-// 加载树形结构
-const loadTree = (): PromptNode[] => {
-  const saved = localStorage.getItem(LS_TREE_KEY);
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch {}
-  }
-  // 尝试从旧版迁移
-  return migrateFromLegacy();
-};
-
-// 加载选中的提示语ID
-const loadSelectedIds = (): string[] => {
-  const saved = localStorage.getItem(LS_SELECTED_KEY);
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch {}
-  }
-  // 默认选中第一个提示语
-  return ['p-linux'];
-};
-
 // 工具函数：获取所有提示语节点（扁平化）
 export const getAllPromptNodes = (tree: PromptNode[]): PromptNode[] => {
   const result: PromptNode[] = [];
@@ -211,7 +146,7 @@ interface PromptStoreState {
 interface PromptStoreActions {
   // 树形结构操作
   setPromptTree: (tree: PromptNode[] | ((prev: PromptNode[]) => PromptNode[])) => void;
-  addNode: (node: Omit<PromptNode, 'id' | 'order'>, parentId?: string | null) => void;
+  addNode: (node: Omit<PromptNode, 'id' | 'order' | 'parentId'>, parentId?: string | null) => void;
   updateNode: (id: string, data: Partial<PromptNode>) => void;
   deleteNode: (id: string) => void;
   moveNode: (id: string, newParentId: string | null, newOrder?: number) => void;
@@ -231,18 +166,18 @@ interface PromptStoreActions {
   // 获取整合后的提示语
   getMergedPrompt: () => string;
   getSelectedPrompts: () => PromptNode[];
+  hydrateConfiguration: (promptTree: PromptNode[], selectedPromptIds: string[]) => void;
 }
 
 export const usePromptStore = create<PromptStoreState & PromptStoreActions>((set, get) => ({
-  promptTree: loadTree(),
-  selectedPromptIds: loadSelectedIds(),
+  promptTree: defaultTree,
+  selectedPromptIds: ['p-linux'],
 
   // ============ 树形结构操作 ============
 
   setPromptTree: (tree) =>
     set((state) => {
       const next = typeof tree === 'function' ? tree(state.promptTree) : tree;
-      localStorage.setItem(LS_TREE_KEY, JSON.stringify(next));
       return { promptTree: next };
     }),
 
@@ -257,7 +192,6 @@ export const usePromptStore = create<PromptStoreState & PromptStoreActions>((set
       } as PromptNode;
 
       const newTree = [...state.promptTree, newNode];
-      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
       return { promptTree: newTree };
     }),
 
@@ -266,7 +200,6 @@ export const usePromptStore = create<PromptStoreState & PromptStoreActions>((set
       const newTree = state.promptTree.map((node) =>
         node.id === id ? { ...node, ...data } : node
       );
-      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
       return { promptTree: newTree };
     }),
 
@@ -286,9 +219,6 @@ export const usePromptStore = create<PromptStoreState & PromptStoreActions>((set
 
       // 更新选中状态
       const newSelectedIds = state.selectedPromptIds.filter(sid => !idsToDelete.has(sid));
-
-      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
-      localStorage.setItem(LS_SELECTED_KEY, JSON.stringify(newSelectedIds));
 
       return { promptTree: newTree, selectedPromptIds: newSelectedIds };
     }),
@@ -333,7 +263,6 @@ export const usePromptStore = create<PromptStoreState & PromptStoreActions>((set
         });
       }
 
-      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
       return { promptTree: newTree };
     }),
 
@@ -342,7 +271,6 @@ export const usePromptStore = create<PromptStoreState & PromptStoreActions>((set
       const newTree = state.promptTree.map((node) =>
         node.id === id ? { ...node, isExpanded: !node.isExpanded } : node
       );
-      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
       return { promptTree: newTree };
     }),
 
@@ -351,7 +279,6 @@ export const usePromptStore = create<PromptStoreState & PromptStoreActions>((set
   setSelectedPromptIds: (ids) =>
     set((state) => {
       const next = typeof ids === 'function' ? ids(state.selectedPromptIds) : ids;
-      localStorage.setItem(LS_SELECTED_KEY, JSON.stringify(next));
       return { selectedPromptIds: next };
     }),
 
@@ -364,7 +291,6 @@ export const usePromptStore = create<PromptStoreState & PromptStoreActions>((set
         ? state.selectedPromptIds.filter(sid => sid !== id)
         : [...state.selectedPromptIds, id];
 
-      localStorage.setItem(LS_SELECTED_KEY, JSON.stringify(newSelectedIds));
       return { selectedPromptIds: newSelectedIds };
     }),
 
@@ -376,14 +302,12 @@ export const usePromptStore = create<PromptStoreState & PromptStoreActions>((set
       if (state.selectedPromptIds.includes(id)) return state;
 
       const newSelectedIds = [...state.selectedPromptIds, id];
-      localStorage.setItem(LS_SELECTED_KEY, JSON.stringify(newSelectedIds));
       return { selectedPromptIds: newSelectedIds };
     }),
 
   deselectPrompt: (id) =>
     set((state) => {
       const newSelectedIds = state.selectedPromptIds.filter(sid => sid !== id);
-      localStorage.setItem(LS_SELECTED_KEY, JSON.stringify(newSelectedIds));
       return { selectedPromptIds: newSelectedIds };
     }),
 
@@ -404,7 +328,6 @@ export const usePromptStore = create<PromptStoreState & PromptStoreActions>((set
         }
         return node;
       });
-      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
       return { promptTree: newTree };
     }),
 
@@ -421,7 +344,6 @@ export const usePromptStore = create<PromptStoreState & PromptStoreActions>((set
         }
         return node;
       });
-      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
       return { promptTree: newTree };
     }),
 
@@ -436,9 +358,10 @@ export const usePromptStore = create<PromptStoreState & PromptStoreActions>((set
         }
         return node;
       });
-      localStorage.setItem(LS_TREE_KEY, JSON.stringify(newTree));
       return { promptTree: newTree };
     }),
+
+  hydrateConfiguration: (promptTree, selectedPromptIds) => set({ promptTree, selectedPromptIds }),
 
   // ============ 获取整合后的提示语 ============
 

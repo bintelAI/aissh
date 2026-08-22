@@ -1,13 +1,20 @@
-
 export interface Server {
   id: string;
   name: string;
   ip: string;
   username: string;
   password?: string;
+  hasCredential?: boolean;
   port: number;
-  status: 'connected' | 'disconnected' | 'connecting' | 'error';
+  status: "connected" | "disconnected" | "connecting" | "error";
   parentId: string | null;
+}
+
+export interface ConnectionDetails {
+  attempt?: number;
+  message?: string;
+  retryable?: boolean;
+  stage?: string;
 }
 
 export interface Folder {
@@ -18,24 +25,24 @@ export interface Folder {
 
 export interface LogEntry {
   timestamp: string;
-  type: 'info' | 'error' | 'warning' | 'command' | 'ai-action' | 'ai-thought';
+  type: "info" | "error" | "warning" | "command" | "ai-action" | "ai-thought";
   content: string;
   serverId: string;
 }
 
-export type ChatRole = 'user' | 'assistant' | 'system';
+export type ChatRole = "user" | "assistant" | "system";
 
 export interface ChatMessage {
   id: string;
   role: ChatRole;
   content: string;
   timestamp: Date;
-  isThought?: boolean; 
+  isThought?: boolean;
   isPendingConfirmation?: boolean;
   commandToExecute?: string;
-  confirmationStatus?: 'pending' | 'confirmed' | 'cancelled';
-  isDone?: boolean;      // 新增：标志任务是否完成
-  summary?: string;     // 新增：存储原始总结报告用于复制
+  confirmationStatus?: "pending" | "confirmed" | "cancelled";
+  isDone?: boolean; // 新增：标志任务是否完成
+  summary?: string; // 新增：存储原始总结报告用于复制
 }
 
 export interface ChatSession {
@@ -43,19 +50,17 @@ export interface ChatSession {
   serverId?: string; // 关联的服务器ID (IP上下文)
   title: string;
   messages: ChatMessage[];
-  mode: 'chat' | 'action';
+  mode: "chat" | "action";
   createdAt: Date;
+  updatedAt?: Date;
 }
 
 export interface AgentConfig {
   maxAttempts: number;
   customPrompt: string;
-  safeMode: boolean; 
-  model: string;
+  safeMode: boolean;
   temperature: number;
   autoSyncTerminal: boolean;
-  // Custom model configuration
-  useCustomModel?: boolean;
   customUrl?: string;
   customKey?: string;
   customModelName?: string;
@@ -74,7 +79,7 @@ export interface AIChatPanelProps {
 export interface AddServerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddServer: (server: Omit<Server, 'id' | 'status'>) => void;
+  onAddServer: (server: Omit<Server, "id" | "status">) => void;
 }
 
 export interface ServerTreeProps {
@@ -89,10 +94,16 @@ export interface ServerTreeProps {
   onAddFolder: (parentId: string | null) => void;
   onEditFolder: (id: string, data: Partial<Folder>) => void;
   onDeleteFolder: (id: string) => void;
-  onMove: (type: 'server' | 'folder', id: string, newParentId: string | null) => void;
+  onMove: (
+    type: "server" | "folder",
+    id: string,
+    newParentId: string | null,
+  ) => void;
   width?: number;
   onOpenFileManager?: (serverId: string) => void;
   onBatchConnect?: (serverIds: string[]) => void;
+  onRetryServer?: (serverId: string) => void;
+  connectionDetails?: Record<string, ConnectionDetails>;
 }
 
 export interface CommandTemplate {
@@ -118,14 +129,14 @@ export interface TerminalProps {
 }
 
 export type HighlightColor =
-  | 'red'
-  | 'orange'
-  | 'yellow'
-  | 'green'
-  | 'cyan'
-  | 'blue'
-  | 'violet'
-  | 'white'
+  | "red"
+  | "orange"
+  | "yellow"
+  | "green"
+  | "cyan"
+  | "blue"
+  | "violet"
+  | "white"
   | string;
 
 export interface HighlightRule {
@@ -145,7 +156,7 @@ export interface PromptProfile {
 
 // ============ 新版树形提示语配置类型 ============
 
-export type PromptNodeType = 'folder' | 'prompt';
+export type PromptNodeType = "folder" | "prompt";
 
 export interface PromptNode {
   id: string;
@@ -181,6 +192,8 @@ export interface ExportConfigData {
   // 新版树形结构
   promptTree?: PromptNode[];
   selectedPromptIds?: string[];
+  commandHistory?: string[];
+  operations?: import("./multiIP").MultiIPOperation[];
   // 旧版兼容
   promptProfiles?: PromptProfile[];
 }
@@ -199,7 +212,7 @@ export interface FileSession {
 export interface FileNode {
   id: string;
   name: string;
-  type: 'file' | 'folder';
+  type: "file" | "folder";
   path: string;
   size?: number;
   permissions?: string;
@@ -211,10 +224,10 @@ export interface FileNode {
 
 export interface FileOperation {
   id: string;
-  type: 'upload' | 'download' | 'move' | 'delete' | 'copy';
+  type: "upload" | "download" | "move" | "delete" | "copy";
   sourcePath: string;
   targetPath?: string;
-  status: 'pending' | 'in-progress' | 'completed' | 'error';
+  status: "pending" | "in-progress" | "completed" | "error";
   progress?: number;
   error?: string;
   serverId: string;

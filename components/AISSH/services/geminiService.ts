@@ -1,56 +1,9 @@
-import OpenAI from 'openai';
 import { ChatMessage, AgentConfig } from '../types';
 import { AIService, AIServiceFactory } from './aiServiceFactory';
 import { usePromptStore } from '../store/usePromptStore';
 import { useAIStore } from '../store/useAIStore';
 import { mergePrompts } from './promptMergeService';
-
-const getAIClient = () => {
-  const { agentConfig } = useAIStore.getState();
-  
-  // 1. 优先使用“神经核心配置” (Neural Core Config) 中的自定义模型配置
-  if (agentConfig.useCustomModel && agentConfig.customUrl && agentConfig.customKey) {
-    return new OpenAI({
-      apiKey: agentConfig.customKey,
-      baseURL: agentConfig.customUrl,
-      dangerouslyAllowBrowser: true,
-      timeout: 60000 // 增加到 60 秒超时，防止长输出导致 socket 中断
-    });
-  }
-
-  // 2. 其次使用本地环境配置 (Local Config)
-  const envKey = import.meta.env.VITE_OPENAI_API_KEY;
-  const envUrl = import.meta.env.VITE_OPENAI_BASE_URL;
-
-  if (envKey && envUrl) {
-    return new OpenAI({
-      apiKey: envKey,
-      baseURL: envUrl,
-      dangerouslyAllowBrowser: true,
-      timeout: 60000 // 增加到 60 秒超时
-    });
-  }
-
-  // 3. 都没有则抛出错误
-  throw new Error('未检测到有效的 AI 核心配置。请在“神经核心配置”中设置自定义模型，或检查本地环境变量。');
-};
-
-const getModel = () => {
-  const { agentConfig } = useAIStore.getState();
-  
-  // 1. 优先使用神经核心配置中的模型名
-  if (agentConfig.useCustomModel && agentConfig.customModelName) {
-    return agentConfig.customModelName;
-  }
-  
-  // 如果选择了预设模型
-  if (!agentConfig.useCustomModel && agentConfig.model) {
-    return agentConfig.model;
-  }
-
-  // 2. 备选使用本地环境配置的模型名
-  return import.meta.env.VITE_OPENAI_MODEL || 'qwen-max';
-};
+import { complete, stream, AiMessage } from './aiClient';
 
 const getSelectedPrompt = (): string => {
   try {
@@ -76,9 +29,7 @@ export class GeminiAIService implements AIService {
     if (!command.trim() || command.length < 2) return null;
     try {
       const devicePrompt = getSelectedPrompt();
-      const response = await getAIClient().chat.completions.create({
-        model: getModel(),
-        messages: [
+      const response = await complete(useAIStore.getState().agentConfig, [
           {
             role: 'system',
             content: `你是一个 Linux 安全专家。${devicePrompt ? `\n\n${devicePrompt}` : ''}\n请分析以下命令并返回 JSON。要求：1. explanation: 简短的中文功能说明。2. riskLevel: "low", "medium", 或 "high"。3. warning: 如果风险等级中或高，说明原因，否则为空。`
@@ -87,12 +38,10 @@ export class GeminiAIService implements AIService {
             role: 'user',
             content: `命令: ${command}`
           }
-        ],
-        response_format: { type: "json_object" }
-      }, { signal });
+        ], { responseFormat: { type: 'json_object' }, signal });
       
       if (signal?.aborted) return null;
-      return JSON.parse(response.choices[0]?.message?.content || "{}");
+      return JSON.parse(response || "{}");
     } catch (e) {
       if (e instanceof Error && e.name === 'AbortError') return null;
       const errorMsg = e instanceof Error ? e.message : "解析失败";
@@ -121,7 +70,7 @@ export class GeminiAIService implements AIService {
         ? recentHistory.slice(-MAX_HISTORY_MESSAGES) 
         : recentHistory;
 
-      const mappedHistory: OpenAI.Chat.ChatCompletionMessageParam[] = recentHistory.map((m) => {
+      const mappedHistory: AiMessage[] = recentHistory.map((m) => {
         const role: 'user' | 'assistant' | 'system' =
           m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user';
         // 限制单条历史消息长度为 4000 字符，防止上下文过大导致超时
@@ -145,24 +94,16 @@ ${devicePrompt ? `\n${devicePrompt}\n` : ''}
 }
 保持回答简洁专业。`;
 
-      const stream = await getAIClient().chat.completions.create({
-        model: getModel(),
-        messages: [
+      await stream(agentConfig, [
           {
             role: 'system',
             content: systemPrompt
           },
           ...mappedHistory,
           { role: 'user', content: message }
-        ],
-        stream: true
-      });
-
-      for await (const chunk of stream) {
-        if (shouldStop && shouldStop()) break;
-        const content = chunk.choices[0]?.delta?.content;
-        if (content) onChunk(content);
-      }
+        ], (chunk) => {
+          if (!shouldStop?.()) onChunk(chunk);
+        });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "连接 AI 出错";
       onChunk(`\n\n**[AI 核心错误]**: ${errorMsg}`);
@@ -172,18 +113,15 @@ ${devicePrompt ? `\n${devicePrompt}\n` : ''}
   async chatWithAI(prompt: string, history: ChatMessage[]): Promise<string> {
     try {
       const devicePrompt = getSelectedPrompt();
-      const response = await getAIClient().chat.completions.create({
-        model: getModel(),
-        messages: [
+      const response = await complete(useAIStore.getState().agentConfig, [
           { 
             role: 'system', 
             content: `你是一个专家级 Linux 运维 AI。${devicePrompt ? `\n\n${devicePrompt}` : ''}` 
           },
           ...history.map(m => ({ role: m.role as any, content: m.content })),
           { role: 'user', content: prompt }
-        ]
-      });
-      return response.choices[0]?.message?.content || '';
+        ]);
+      return response;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Error connecting to AI service";
       return `[AI Error]: ${errorMsg}`;
@@ -207,7 +145,6 @@ export const runAutonomousTask = async (
   requestConfirmation: (command: string) => Promise<boolean>,
   shouldStop: () => boolean
 ) => {
-  const modelName = getModel();
   const devicePrompt = getSelectedPrompt();
   
   let systemPrompt = `目标: ${goal}
@@ -238,7 +175,7 @@ export const runAutonomousTask = async (
 
   // 操作指令规范已迁移至设备类型提示语配置，通过 selected prompt 注入
 
-  let history: OpenAI.Chat.ChatCompletionMessageParam[] = [
+  let history: AiMessage[] = [
     {
       role: 'system',
       content: systemPrompt
@@ -257,17 +194,12 @@ export const runAutonomousTask = async (
     const currentAttemptInfo = `当前是第 ${attempts + 1} 次尝试（最多 ${maxAttempts} 次）。`;
     
     try {
-      const response = await getAIClient().chat.completions.create({
-        model: modelName,
-        messages: [
+      const response = await complete(config, [
           ...history,
           { role: 'user', content: currentAttemptInfo }
-        ],
-        response_format: { type: "json_object" },
-        temperature: config.temperature
-      });
+        ], { responseFormat: { type: 'json_object' }, temperature: config.temperature });
 
-      const plan = JSON.parse(response.choices[0]?.message?.content || "{}");
+      const plan = JSON.parse(response || "{}");
 
       if (plan.isDone || attempts + 1 >= maxAttempts) {
         const isTimeout = !plan.isDone && attempts + 1 >= maxAttempts;
@@ -297,19 +229,11 @@ ${devicePrompt ? `\n${devicePrompt}\n` : ''}
         
         let accumulatedSummary = "";
         try {
-          const stream = await getAIClient().chat.completions.create({
-            model: modelName,
-            messages: [
+          await stream(config, [
               ...history,
               { role: 'user', content: summaryPrompt }
-            ],
-            stream: true
-          });
-
-          for await (const chunk of stream) {
-            if (shouldStop()) break;
-            const content = chunk.choices[0]?.delta?.content;
-            if (content) {
+            ], async (content) => {
+            if (!shouldStop()) {
               accumulatedSummary += content;
               await onStep({ 
                 thought: isTimeout ? "任务执行超时，已生成阶段性报告。" : plan.thought, 
@@ -317,7 +241,7 @@ ${devicePrompt ? `\n${devicePrompt}\n` : ''}
                 summary: accumulatedSummary 
               });
             }
-          }
+          });
         } catch (e) {
           await onStep({ 
             thought: plan.thought, 
@@ -376,17 +300,14 @@ ${devicePrompt ? `\n${devicePrompt}\n` : ''}
 export const analyzeLogs = async (log: string) => {
   try {
     const devicePrompt = getSelectedPrompt();
-    const response = await getAIClient().chat.completions.create({
-      model: getModel(),
-      messages: [
+    const response = await complete(useAIStore.getState().agentConfig, [
         { 
           role: 'system', 
           content: `你是一个 Linux 日志分析专家。${devicePrompt ? `\n\n${devicePrompt}` : ''}\n请分析以下日志并给出简洁的分析结果。` 
         },
         { role: 'user', content: log }
-      ]
-    });
-    return response.choices[0]?.message?.content || '';
+      ]);
+    return response;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : "Error analyzing logs";
     return `[AI Error]: ${errorMsg}`;

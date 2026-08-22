@@ -1,90 +1,11 @@
 import { create } from 'zustand';
-import { persist, StorageValue } from 'zustand/middleware';
 import { MultiIPOperationState, MultiIPOperation, ExecutionStep } from '../types/multiIP';
 
-const STORAGE_KEY = 'multi-ip-operations';
+interface PersistedMultiIPState {
+  hydrateOperations: (operations: MultiIPOperation[]) => void;
+}
 
-const customStorage = {
-  getItem: (name: string): StorageValue<MultiIPOperationState> | null => {
-    const str = localStorage.getItem(name);
-    if (!str) return null;
-    
-    try {
-      const parsed = JSON.parse(str);
-      return {
-        state: {
-          ...parsed.state,
-          operations: deserializeOperations(parsed.state.operations)
-        },
-        version: parsed.version
-      };
-    } catch (e) {
-      console.error('Failed to parse stored data:', e);
-      return null;
-    }
-  },
-  setItem: (name: string, value: StorageValue<MultiIPOperationState>): void => {
-    try {
-      const serialized = JSON.stringify({
-        state: {
-          ...value.state,
-          operations: serializeOperations(value.state.operations)
-        },
-        version: value.version
-      });
-      localStorage.setItem(name, serialized);
-    } catch (e) {
-      console.error('Failed to serialize data:', e);
-    }
-  },
-  removeItem: (name: string): void => {
-    localStorage.removeItem(name);
-  }
-};
-
-// 序列化时处理 Date 对象
-const serializeOperations = (operations: MultiIPOperation[]): any[] => {
-  return operations.map(op => ({
-    ...op,
-    createdAt: op.createdAt.toISOString(),
-    startedAt: op.startedAt?.toISOString(),
-    completedAt: op.completedAt?.toISOString(),
-    steps: op.steps.map(step => ({
-      ...step,
-      startTime: step.startTime.toISOString(),
-      endTime: step.endTime?.toISOString(),
-      serverResults: step.serverResults.map(sr => ({
-        ...sr,
-        startTime: sr.startTime?.toISOString(),
-        endTime: sr.endTime?.toISOString()
-      }))
-    }))
-  }));
-};
-
-// 反序列化时恢复 Date 对象
-const deserializeOperations = (operations: any[]): MultiIPOperation[] => {
-  return operations.map(op => ({
-    ...op,
-    createdAt: new Date(op.createdAt),
-    startedAt: op.startedAt ? new Date(op.startedAt) : undefined,
-    completedAt: op.completedAt ? new Date(op.completedAt) : undefined,
-    steps: op.steps.map((step: any) => ({
-      ...step,
-      startTime: new Date(step.startTime),
-      endTime: step.endTime ? new Date(step.endTime) : undefined,
-      serverResults: step.serverResults.map((sr: any) => ({
-        ...sr,
-        startTime: sr.startTime ? new Date(sr.startTime) : undefined,
-        endTime: sr.endTime ? new Date(sr.endTime) : undefined
-      }))
-    }))
-  }));
-};
-
-export const useMultiIPStore = create<MultiIPOperationState>()(
-  persist(
-    (set, get) => ({
+export const useMultiIPStore = create<MultiIPOperationState & PersistedMultiIPState>((set, get) => ({
       operations: [],
       activeOperationId: null,
 
@@ -310,6 +231,11 @@ export const useMultiIPStore = create<MultiIPOperationState>()(
         }));
       },
 
+      hydrateOperations: (operations) => set({
+        operations,
+        activeOperationId: null,
+      }),
+
       getOperation: (operationId) => {
         return get().operations.find(op => op.id === operationId);
       },
@@ -318,14 +244,4 @@ export const useMultiIPStore = create<MultiIPOperationState>()(
         const { operations, activeOperationId } = get();
         return operations.find(op => op.id === activeOperationId);
       }
-    }),
-    {
-      name: STORAGE_KEY,
-      storage: customStorage,
-      partialize: (state) => ({
-        operations: state.operations,
-        activeOperationId: state.activeOperationId
-      })
-    }
-  )
-);
+    }));

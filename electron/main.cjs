@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { fork, exec } = require('child_process');
@@ -56,6 +56,24 @@ ipcMain.handle('get-backend-port', async () => {
     console.error('[Main] Failed to get backend port:', err);
     return 3001;
   }
+});
+
+ipcMain.handle('save-configuration', async (_event, payload) => {
+  if (!payload || typeof payload.contents !== 'string') {
+    throw new Error('Invalid configuration export payload');
+  }
+
+  const suggestedName = typeof payload.suggestedName === 'string' && payload.suggestedName.length > 0
+    ? payload.suggestedName
+    : 'gemini-ssh-config.json';
+  const result = await dialog.showSaveDialog(mainWindow, {
+    defaultPath: path.join(app.getPath('documents'), suggestedName),
+    filters: [{ name: 'JSON 配置备份', extensions: ['json'] }],
+  });
+
+  if (result.canceled || !result.filePath) return { canceled: true };
+  fs.writeFileSync(result.filePath, payload.contents, 'utf8');
+  return { canceled: false, path: result.filePath };
 });
 
 function createSplashWindow() {
@@ -120,6 +138,9 @@ function createWindow() {
 
 function startBackend() {
   const backendStartTime = Date.now();
+  const appDataDir = app.getPath('userData');
+  fs.mkdirSync(path.join(appDataDir, 'data'), { recursive: true });
+  fs.mkdirSync(path.join(appDataDir, 'backups'), { recursive: true });
   let backendDist;
   
   if (app.isPackaged) {
@@ -156,6 +177,7 @@ function startBackend() {
       cwd: backendRoot,
       env: { 
         ...process.env, 
+        APP_DATA_DIR: appDataDir,
         PORT: app.isPackaged ? '0' : '3001',
         NODE_ENV: app.isPackaged ? 'production' : 'development'
       },

@@ -92,7 +92,7 @@ export const PromptConfigModal: React.FC<PromptConfigModalProps> = ({ onClose })
 
   return createPortal(
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
-      <div className="w-full max-w-5xl bg-sci-obsidian border border-sci-cyan/30 clip-corner shadow-[0_0_50px_rgba(0,243,255,0.1)] max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-5xl bg-sci-obsidian border border-sci-cyan/30 clip-corner drop-shadow-[0_0_40px_rgba(0,243,255,0.18)] max-h-[90vh] flex flex-col">
         <div className="p-4 border-b border-white/10 flex items-center justify-between bg-sci-panel/50">
           <div className="text-xs font-sci font-bold text-sci-text uppercase tracking-widest">
             设备类型提示语配置 (树形结构)

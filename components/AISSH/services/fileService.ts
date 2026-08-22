@@ -142,7 +142,7 @@ export class FileService {
   }
 
   async backupFile(serverId: string, filePath: string): Promise<string> {
-    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').split('.')[0];
+    const timestamp = new Date().toISOString().replace(new RegExp('[-:T]', 'g'), '').split('.')[0];
     const backupPath = `${filePath}.${timestamp}`;
     const command = `cp "${filePath}" "${backupPath}"`;
     const output = await sshManager.executeCommand(command, serverId);

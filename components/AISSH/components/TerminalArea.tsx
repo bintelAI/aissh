@@ -10,7 +10,7 @@ interface TerminalAreaProps {
 }
 
 export const TerminalArea: React.FC<TerminalAreaProps> = ({ commandToInsert, onAnalyzeLog }) => {
-  const { activeSessionId, openSessions, logs, setLogs, connectionStatus, setActiveSessionId } = useSSHStore();
+  const { activeSessionId, openSessions, logs, clearLogs, connectionStatus, setActiveSessionId } = useSSHStore();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [hasMatches, setHasMatches] = useState(true);
   const terminalRefs = useRef<Record<string, TerminalHandle | null>>({});
@@ -102,7 +102,7 @@ export const TerminalArea: React.FC<TerminalAreaProps> = ({ commandToInsert, onA
              logs={logs.filter(l => l.serverId === sessionId || l.serverId === 'system')} 
              serverId={sessionId}
              isSearching={isSearchOpen}
-             onClear={() => setLogs(logs.filter(x => x.serverId !== sessionId))} 
+             onClear={() => clearLogs(sessionId)}
              onAnalyzeError={onAnalyzeLog}
              onSelectionAI={(text: string) => {
                // 这里确保只传递文本，不触发自动分析

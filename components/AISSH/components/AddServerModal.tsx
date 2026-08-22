@@ -34,7 +34,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ onClose, onSave,
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
       <CyberPanel 
         variant="obsidian" 
-        className="w-full max-w-lg border border-sci-cyan/30 shadow-[0_0_50px_rgba(0,243,255,0.15)] clip-corner overflow-hidden animate-in zoom-in-95 duration-200"
+        className="w-full max-w-lg border border-sci-cyan/30 drop-shadow-[0_0_40px_rgba(0,243,255,0.22)] clip-corner overflow-hidden animate-in zoom-in-95 duration-200"
       >
         {/* Header */}
         <div className="p-5 border-b border-white/10 flex items-center justify-between bg-sci-panel/50">

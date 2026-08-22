@@ -6,24 +6,26 @@
   html {
     color-scheme: dark;
   }
-  
+
   html[data-theme="night"] body {
-    background-color: #050505; /* Updated to sci-base */
-    color: #e0f7fa; /* Updated to sci-text */
+    background-color: #050505;
+    color: #e0f7fa;
   }
-  
+
   body {
-    font-family: 'Rajdhani', 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background-color: #050505;
+    color: #e0f7fa;
     margin: 0;
     padding: 0;
   }
 
   /* 强制覆盖所有 pre 标签的背景色 */
   pre {
-    background-color: #0a0f14 !important; /* sci-panel */
+    background-color: #0a0f14 !important;
     color: #e0f7fa !important;
-    border: 1px solid rgba(0, 243, 255, 0.1);
-    border-radius: 0.25rem;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 6px;
   }
 
   /* 覆盖 code 标签的背景色，避免在 pre 内部出现不一致 */
@@ -46,15 +48,14 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: rgba(0, 243, 255, 0.2);
+    background: rgba(100, 116, 139, 0.5);
     border-radius: 3px;
-    border: 1px solid rgba(0, 243, 255, 0.1);
-    transition: all 0.3s ease;
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    transition: background-color 150ms ease;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 243, 255, 0.5);
-    box-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
+    background: rgba(0, 243, 255, 0.6);
   }
 
   ::-webkit-scrollbar-corner {
@@ -68,12 +69,12 @@
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(188, 19, 254, 0.3); /* 使用电紫色适配部分区域 */
-    border-radius: 10px;
+    background: rgba(100, 116, 139, 0.48);
+    border-radius: 3px;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(188, 19, 254, 0.6);
+    background: rgba(0, 243, 255, 0.6);
   }
 
   /* 隐藏滚动条类 */
@@ -87,20 +88,61 @@
 }
 
 @layer utilities {
+  /* 霓虹文字辉光（沿用旧名，颜色升级为真·霓虹） */
   .text-glow {
-    text-shadow: 0 0 5px rgba(0, 243, 255, 0.5), 0 0 10px rgba(0, 243, 255, 0.3);
-  }
-  
-  .border-glow {
-    box-shadow: 0 0 5px rgba(0, 243, 255, 0.3), inset 0 0 5px rgba(0, 243, 255, 0.1);
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.45), 0 0 18px rgba(0, 243, 255, 0.2);
   }
 
+  .border-glow {
+    box-shadow: 0 0 0 1px rgba(0, 243, 255, 0.25), 0 0 22px rgba(0, 243, 255, 0.18);
+  }
+
+  /* 赛博朋克统一切角：10px 缺角，全站交互元素/面板共用 */
   .clip-corner {
     clip-path: polygon(
-      10px 0, 100% 0, 
-      100% calc(100% - 10px), calc(100% - 10px) 100%, 
-      0 100%, 0 10px
+      10px 0,
+      100% 0,
+      100% calc(100% - 10px),
+      calc(100% - 10px) 100%,
+      0 100%,
+      0 10px
     );
+  }
+
+  /* 霓虹文字辉光 */
+  .neon-text-cyan {
+    color: #00f3ff;
+    text-shadow: 0 0 5px rgba(0, 243, 255, 0.6), 0 0 14px rgba(0, 243, 255, 0.35);
+  }
+  .neon-text-violet {
+    color: #bc13fe;
+    text-shadow: 0 0 5px rgba(188, 19, 254, 0.6), 0 0 14px rgba(188, 19, 254, 0.35);
+  }
+  .neon-text-green {
+    color: #0aff00;
+    text-shadow: 0 0 5px rgba(10, 255, 0, 0.6), 0 0 14px rgba(10, 255, 0, 0.3);
+  }
+  .neon-text-red {
+    color: #ff2a00;
+    text-shadow: 0 0 5px rgba(255, 42, 0, 0.6), 0 0 14px rgba(255, 42, 0, 0.3);
+  }
+
+  /* 霓虹边框辉光 */
+  .glow-border-cyan {
+    border-color: rgba(0, 243, 255, 0.55) !important;
+    box-shadow: 0 0 7px rgba(0, 243, 255, 0.55), inset 0 0 7px rgba(0, 243, 255, 0.18);
+  }
+  .glow-border-violet {
+    border-color: rgba(188, 19, 254, 0.55) !important;
+    box-shadow: 0 0 7px rgba(188, 19, 254, 0.55), inset 0 0 7px rgba(188, 19, 254, 0.18);
+  }
+
+  /* 赛博网格背景 */
+  .cyber-grid {
+    background-image:
+      linear-gradient(rgba(0, 243, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 243, 255, 0.05) 1px, transparent 1px);
+    background-size: 22px 22px;
   }
 }
 
@@ -113,10 +155,11 @@
 }
 
 .prose code {
-  color: #00f3ff !important; /* sci-cyan */
-  background-color: #11161d !important; /* sci-obsidian */
+  color: #7df3ff !important;
+  background-color: #182331 !important;
   padding: 0.2em 0.4em;
-  border-radius: 0.25rem;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 4px;
   font-weight: 400;
 }
 

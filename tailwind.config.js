@@ -27,7 +27,14 @@ export default {
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
       },
       backgroundImage: {
-        'grid-pattern': "linear-gradient(rgba(0, 243, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 243, 255, 0.05) 1px, transparent 1px)",
+        'grid-pattern': "linear-gradient(rgba(0, 243, 255, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 243, 255, 0.04) 1px, transparent 1px)",
+      },
+      boxShadow: {
+        'neon-cyan': '0 0 5px rgba(0,243,255,0.6), 0 0 16px rgba(0,243,255,0.3)',
+        'neon-cyan-sm': '0 0 4px rgba(0,243,255,0.5)',
+        'neon-violet': '0 0 5px rgba(188,19,254,0.6), 0 0 16px rgba(188,19,254,0.3)',
+        'neon-green': '0 0 5px rgba(10,255,0,0.55)',
+        'neon-red': '0 0 5px rgba(255,42,0,0.55)',
       },
       animation: {
         'reverse-spin': 'reverse-spin 10s linear infinite',
@@ -36,6 +43,7 @@ export default {
         'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'hologram': 'hologram 4s infinite',
         'decode': 'decode 0.5s steps(10, end)',
+        'flicker': 'flicker 4s linear infinite',
       },
       keyframes: {
         'reverse-spin': {
@@ -57,6 +65,10 @@ export default {
           '52%': { opacity: 0.5 },
           '54%': { opacity: 0.8 },
           '56%': { opacity: 1 },
+        },
+        'flicker': {
+          '0%, 18%, 22%, 25%, 53%, 57%, 100%': { opacity: '1' },
+          '20%, 24%, 55%': { opacity: '0.35' },
         }
       }
     },

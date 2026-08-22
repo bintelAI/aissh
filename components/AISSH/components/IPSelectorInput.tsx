@@ -141,8 +141,13 @@ export const IPSelectorInput: React.FC<IPSelectorInputProps> = ({
         case 'Enter':
           e.preventDefault();
           if (highlightedIndex >= 0 && highlightedIndex < filteredServers.length) {
-            selectServer(filteredServers[highlightedIndex]);
-            // 选择后不关闭下拉框，继续选择其他服务器
+            const highlightedServer = filteredServers[highlightedIndex];
+            if (selectedIPs.some(ip => ip.id === highlightedServer.id)) {
+              onSend();
+            } else {
+              selectServer(highlightedServer);
+            }
+            // 未选中的高亮项继续加入目标，已选中的高亮项提交当前多 IP 操作
           }
           return;
         
@@ -160,14 +165,12 @@ export const IPSelectorInput: React.FC<IPSelectorInputProps> = ({
       }
     }
     
-    // 处理发送 - 使用 Ctrl+Enter 发送，普通 Enter 换行
+    // 处理发送：下拉选择时 Enter 用于继续选 IP；已有 IP 时 Enter 提交多 IP 操作
     if (e.key === 'Enter') {
-      if (e.ctrlKey || e.metaKey) {
-        // Ctrl+Enter 或 Cmd+Enter 发送消息
+      if ((e.ctrlKey || e.metaKey || selectedIPs.length > 0) && !e.shiftKey) {
         e.preventDefault();
         onSend();
       }
-      // 普通 Enter 键允许默认行为（换行），不阻止
     }
   };
 
@@ -234,40 +237,42 @@ export const IPSelectorInput: React.FC<IPSelectorInputProps> = ({
 
   return (
     <div ref={containerRef} className="relative w-full">
-      {/* 选中的 IP 标签 */}
-      {selectedIPs.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {selectedIPs.map(ip => (
-            <span
-              key={ip.id}
-              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium 
-                         bg-gradient-to-r from-sci-cyan/20 to-sci-violet/20 
-                         border border-sci-cyan/40 text-sci-cyan 
-                         rounded-sm animate-in fade-in slide-in-from-bottom-1"
-            >
-              <ServerIcon size={10} />
-              <span className="truncate max-w-[120px]">{ip.name}</span>
-              <span className="text-sci-dim/60">({ip.ip})</span>
-              <button
-                onClick={() => removeSelectedIP(ip.id)}
-                className="ml-1 p-0.5 hover:bg-sci-cyan/20 rounded transition-colors"
-              >
-                <X size={10} />
-              </button>
-            </span>
-          ))}
-          <button
-            onClick={() => onSelectedIPsChange([])}
-            className="text-[10px] text-sci-dim/60 hover:text-sci-cyan 
-                       underline decoration-dotted transition-colors"
-          >
-            清除全部
-          </button>
-        </div>
-      )}
-
       {/* 输入框容器 */}
-      <div className="relative">
+      <div className="relative min-h-[36px] bg-black/40 border border-white/10 focus-within:border-sci-cyan/50 transition-all">
+        {selectedIPs.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 px-3 pt-2">
+            {selectedIPs.map(ip => (
+              <span
+                key={ip.id}
+                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium
+                           bg-gradient-to-r from-sci-cyan/20 to-sci-violet/20
+                           border border-sci-cyan/40 text-sci-cyan
+                           rounded-sm animate-in fade-in slide-in-from-bottom-1"
+              >
+                <ServerIcon size={10} />
+                <span className="truncate max-w-[120px]">{ip.name}</span>
+                <span className="text-sci-dim/60">({ip.ip})</span>
+                <button
+                  type="button"
+                  aria-label={`移除 ${ip.name}`}
+                  onClick={() => removeSelectedIP(ip.id)}
+                  className="ml-1 p-0.5 hover:bg-sci-cyan/20 rounded transition-colors"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+            <button
+              type="button"
+              onClick={() => onSelectedIPsChange([])}
+              className="text-[10px] text-sci-dim/60 hover:text-sci-cyan
+                         underline decoration-dotted transition-colors"
+            >
+              清除全部
+            </button>
+          </div>
+        )}
+
         <textarea
           ref={inputRef}
           value={value}
@@ -280,8 +285,8 @@ export const IPSelectorInput: React.FC<IPSelectorInputProps> = ({
               ? `向 ${selectedIPs.length} 台服务器发送指令...` 
               : placeholder
           }
-          className="w-full bg-black/40 border border-white/10 px-3 py-2 
-                     font-mono text-xs focus:outline-none focus:border-sci-cyan/50 
+          className="w-full bg-transparent border-0 px-3 py-2
+                     font-mono text-xs focus:outline-none
                      text-sci-text transition-all resize-none min-h-[36px] max-h-[120px]
                      placeholder:text-sci-dim/40"
           rows={1}

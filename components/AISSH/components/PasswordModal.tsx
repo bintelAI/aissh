@@ -2,22 +2,21 @@
 import React, { useState } from 'react';
 import { CyberPanel } from '../common/CyberPanel';
 import { Button } from '../common/Button';
-import { X, Key, ShieldCheck, Lock } from 'lucide-react';
+import { X, Key, Lock } from 'lucide-react';
 
 interface PasswordModalProps {
   serverName: string;
   onClose: () => void;
-  onConfirm: (password: string, remember: boolean) => void;
+  onConfirm: (password: string) => void;
 }
 
 export const PasswordModal: React.FC<PasswordModalProps> = ({ serverName, onClose, onConfirm }) => {
   const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (password) {
-      onConfirm(password, remember);
+      onConfirm(password);
     }
   };
 
@@ -25,7 +24,7 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ serverName, onClos
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
       <CyberPanel 
         variant="obsidian" 
-        className="w-full max-w-md border border-sci-cyan/30 shadow-[0_0_50px_rgba(0,243,255,0.2)] clip-corner overflow-hidden animate-in zoom-in-95 duration-200"
+        className="w-full max-w-md border border-sci-cyan/30 drop-shadow-[0_0_40px_rgba(0,243,255,0.28)] clip-corner overflow-hidden animate-in zoom-in-95 duration-200"
       >
         <div className="p-5 border-b border-white/10 flex items-center justify-between bg-sci-panel/50">
           <div className="flex items-center gap-3">
@@ -66,15 +65,6 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ serverName, onClos
               />
               <div className="absolute bottom-0 left-0 h-[1px] bg-sci-cyan w-0 group-focus-within:w-full transition-all duration-500"></div>
             </div>
-          </div>
-
-          <div className="flex items-center gap-3 group cursor-pointer" onClick={() => setRemember(!remember)}>
-            <div className={`w-4 h-4 border transition-all flex items-center justify-center ${remember ? 'bg-sci-cyan border-sci-cyan' : 'bg-transparent border-white/20 group-hover:border-sci-cyan/50'}`}>
-              {remember && <ShieldCheck size={12} className="text-black" />}
-            </div>
-            <span className="text-[10px] font-sci font-bold text-sci-dim uppercase tracking-widest group-hover:text-sci-text transition-colors">
-              在本地保险库保存凭据
-            </span>
           </div>
 
           <div className="flex items-center justify-end gap-4 pt-2">

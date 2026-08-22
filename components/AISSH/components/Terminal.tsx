@@ -9,6 +9,7 @@ import { LogEntry } from '../types/index';
 import { sshManager } from '../services/sshService';
 import { Terminal as TerminalIcon, Trash2, Sparkles, Loader2, Download, AlertTriangle } from 'lucide-react';
 import { predictCommandRisk } from '../services/geminiService';
+import { usePromptStore } from '../store/usePromptStore';
 
 import { CanvasAddon } from 'xterm-addon-canvas';
 
@@ -279,16 +280,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(({
 
   // Keyword Highlighting Utility
   const highlightData = (data: string) => {
-    const getSelectedRules = () => {
-      try {
-        const profiles = JSON.parse(localStorage.getItem('ssh_prompt_profiles') || '[]');
-        const selectedId = localStorage.getItem('ssh_selected_prompt_profile');
-        const found = profiles.find((p: any) => p.id === selectedId) || profiles[0];
-        return found?.rules || [];
-      } catch {
-        return [];
-      }
-    };
+    const getSelectedRules = () => usePromptStore.getState().getSelectedPrompts().flatMap((profile) => profile.rules ?? []);
     const codeFor = (color: string) => {
       switch (color) {
         case 'red':
@@ -481,7 +473,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(({
           {/* Disconnected Overlay */}
           {(status === 'disconnected' || status === 'error') && (
              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-                 <div className="bg-sci-red/90 border border-sci-red px-4 py-2 clip-corner flex items-center gap-3 shadow-[0_0_20px_rgba(255,42,0,0.5)]">
+                 <div className="bg-sci-red/90 border border-sci-red px-4 py-2 clip-corner flex items-center gap-3 drop-shadow-[0_0_18px_rgba(255,42,0,0.6)]">
                      <div className="w-2 h-2 bg-white animate-pulse rounded-full"></div>
                      <span className="text-white font-bold tracking-widest uppercase text-xs">
                         {status === 'error' ? 'Connection Failed' : 'Signal Lost'}

@@ -19,41 +19,38 @@ export const Button: React.FC<ButtonProps> = ({
   ...props 
 }) => {
   const sizeMap = {
-    xs: 'px-2 py-1 text-[9px]',
-    sm: 'px-3 py-1.5 text-[10px]',
+    xs: 'px-2 py-1 text-[10px]',
+    sm: 'px-3 py-1.5 text-xs',
     md: 'px-5 py-2 text-xs',
     lg: 'px-8 py-3 text-sm'
   };
 
   const variantMap = {
-    primary: 'bg-sci-cyan/10 border-sci-cyan/50 text-sci-cyan hover:bg-sci-cyan hover:text-black shadow-[0_0_15px_rgba(0,243,255,0.1)]',
-    secondary: 'bg-sci-violet/10 border-sci-violet/50 text-sci-violet hover:bg-sci-violet hover:text-black shadow-[0_0_15px_rgba(139,92,246,0.1)]',
-    accent: 'bg-sci-green/10 border-sci-green/50 text-sci-green hover:bg-sci-green hover:text-black',
-    ghost: 'bg-transparent border-transparent text-sci-dim hover:text-sci-text hover:bg-white/5',
-    error: 'bg-sci-red/10 border-sci-red/50 text-sci-red hover:bg-sci-red hover:text-black shadow-[0_0_15px_rgba(255,42,0,0.1)]',
-    success: 'bg-sci-green/10 border-sci-green/50 text-sci-green hover:bg-sci-green hover:text-black',
-    'sci-cyan': 'bg-sci-cyan/10 border-sci-cyan/50 text-sci-cyan hover:bg-sci-cyan hover:text-black shadow-[0_0_15px_rgba(0,243,255,0.1)]',
-    'sci-violet': 'bg-sci-violet/10 border-sci-violet/50 text-sci-violet hover:bg-sci-violet hover:text-black shadow-[0_0_15px_rgba(139,92,246,0.1)]',
+    primary: 'bg-sci-cyan border-sci-cyan text-slate-950 hover:bg-[#66f6ff] hover:border-[#66f6ff] hover:shadow-neon-cyan',
+    secondary: 'bg-sci-obsidian border-slate-600 text-sci-text hover:bg-slate-700 hover:border-slate-500',
+    accent: 'bg-sci-green border-sci-green text-slate-950 hover:bg-[#4dff4d] hover:border-[#4dff4d] hover:shadow-neon-green',
+    ghost: 'bg-transparent border-transparent text-sci-dim hover:bg-slate-800/80 hover:text-sci-text',
+    error: 'bg-sci-red border-sci-red text-slate-950 hover:bg-[#ff5a3c] hover:border-[#ff5a3c] hover:shadow-neon-red',
+    success: 'bg-sci-green border-sci-green text-slate-950 hover:bg-[#4dff4d] hover:border-[#4dff4d] hover:shadow-neon-green',
+    'sci-cyan': 'bg-sci-cyan border-sci-cyan text-slate-950 hover:bg-[#66f6ff] hover:border-[#66f6ff] hover:shadow-neon-cyan',
+    'sci-violet': 'bg-sci-violet/10 border-sci-violet/50 text-sci-violet hover:bg-sci-violet hover:text-black hover:shadow-neon-violet',
   };
 
   return (
     <button 
       className={`
-        relative inline-flex items-center justify-center gap-2 font-sci font-bold uppercase tracking-[0.15em] 
-        transition-all duration-300 border clip-corner disabled:opacity-30 disabled:pointer-events-none
+        relative inline-flex items-center justify-center gap-2 rounded-md border font-medium
+        transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-sci-base disabled:pointer-events-none disabled:opacity-50
         ${sizeMap[size]} 
         ${variantMap[variant as keyof typeof variantMap] || variantMap.primary}
-        ${glow ? 'animate-pulse' : ''}
+        ${glow ? 'shadow-[0_8px_20px_rgba(14,165,233,0.16)]' : ''}
         ${className}
       `}
       disabled={loading || props.disabled}
       {...props}
     >
       {loading && <Loader2 size={14} className="animate-spin" />}
-      <span className="relative z-10">{children}</span>
-      
-      {/* Hover effect overlay */}
-      <div className="absolute inset-0 bg-white/5 opacity-0 hover:opacity-100 transition-opacity duration-300"></div>
+      <span>{children}</span>
     </button>
   );
 };
