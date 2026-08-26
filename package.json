@@ -2,6 +2,7 @@
   "name": "bintelai-ssh-assistant",
   "private": true,
   "version": "2.0.0",
+  "packageManager": "pnpm@10.33.0",
   "type": "module",
   "engines": {
     "node": ">=22.5.0"
@@ -13,10 +14,10 @@
     "preview": "vite preview",
     "build:back": "cd back && pnpm run build && npx ncc build src/main.ts -o dist/bundle -m --no-cache --minify && node -e \"const fs=require('fs');const s='dist/bundle/index.js';const d='dist/bundle/index.cjs';if(fs.existsSync(s)){if(fs.existsSync(d))fs.unlinkSync(d);fs.renameSync(s,d)}\"",
     "electron:dev": "npm run build:back && concurrently \"vite --config vite.config.electron.ts\" \"wait-on http://localhost:3000 && electron .\"",
-    "electron:build": "npm run build:back && vite build --config vite.config.electron.ts && electron-builder",
+    "electron:build": "npm run build:back && vite build --config vite.config.electron.ts && electron-builder --publish never",
     "electron:build:mac": "npm run electron:build -- --mac --universal",
     "electron:build:win": "npm run electron:build -- --win --x64",
-    "electron:build:win7": "npm run build:back && vite build --config vite.config.electron.ts && electron-builder --win --x64 -c.electronVersion=22.3.27 -c.artifactName=\"${productName}-Win7-${version}-${arch}.exe\"",
+    "electron:build:win7": "npm run build:back && vite build --config vite.config.electron.ts && electron-builder --publish never --win --x64 -c.electronVersion=22.3.27 -c.artifactName=\"${productName}-Win7-${version}-${arch}.exe\"",
     "electron:build:linux": "npm run electron:build -- --linux"
   },
   "dependencies": {

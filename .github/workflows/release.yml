@@ -1,4 +1,4 @@
-name: "Release"
+name: Release
 
 on:
   push:
@@ -7,11 +7,21 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to publish, for example v2.0.1. Leave empty to build artifacts only.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  publish:
-    permissions:
-      contents: write
+  build:
     strategy:
       fail-fast: false
       matrix:
@@ -23,69 +33,84 @@ jobs:
         shell: bash
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - name: install pnpm
+      - name: Install pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 9
+          version: 10.33.0
           run_install: false
 
-      - name: setup node
-        uses: actions/setup-node@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            back/pnpm-lock.yaml
 
       - name: Configure Git to use HTTPS
         run: git config --global url."https://github.com/".insteadOf "git@github.com:"
 
-      - name: install dependencies
-        run: pnpm install
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
 
-      - name: install backend dependencies
-        run: |
-          cd back
-          pnpm install
+      - name: Install backend dependencies
+        run: pnpm --dir back install --frozen-lockfile --ignore-workspace
 
-      - name: build backend
+      - name: Build backend
         run: pnpm run build:back
 
-      - name: build app (macOS)
+      - name: Build macOS app
         if: matrix.platform == 'macos-latest'
         run: pnpm run electron:build:mac
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: build app (Windows)
+      - name: Build Windows app
         if: matrix.platform == 'windows-latest'
         run: |
           pnpm run electron:build:win
           pnpm run electron:build:win7
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
         with:
           name: build-artifacts-${{ matrix.platform }}
+          if-no-files-found: error
           path: |
             release/*.exe
             release/*.dmg
             release/*.zip
             release/*.blockmap
 
-      - name: release
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
         with:
-          tag_name: ${{ github.ref_name }}
+          pattern: build-artifacts-*
+          merge-multiple: true
+          path: release
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          target_commitish: ${{ github.sha }}
           files: |
             release/*.exe
             release/*.dmg
             release/*.zip
             release/*.blockmap
-          draft: true
+          generate_release_notes: true
+          make_latest: true
+          draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
