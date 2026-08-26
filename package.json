@@ -1,7 +1,7 @@
 {
   "name": "bintelai-ssh-assistant",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "packageManager": "pnpm@10.33.0",
   "type": "module",
   "engines": {
@@ -10,6 +10,7 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
+    "test:frontend": "pnpm --dir back exec jest --runInBand --config ../jest.frontend.config.cjs",
     "build": "vite build",
     "preview": "vite preview",
     "build:back": "cd back && pnpm run build && npx ncc build src/main.ts -o dist/bundle -m --no-cache --minify && node -e \"const fs=require('fs');const s='dist/bundle/index.js';const d='dist/bundle/index.cjs';if(fs.existsSync(s)){if(fs.existsSync(d))fs.unlinkSync(d);fs.renameSync(s,d)}\"",

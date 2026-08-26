@@ -913,12 +913,6 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
             </div>
           </div>
           <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as any}>
-            <button onClick={() => setIsPromptConfigOpen(true)} className="h-8 px-2 flex items-center justify-center text-sci-text/80 hover:text-sci-violet transition-all hover:opacity-100" title="设备类型提示语配置">
-              <Sparkles size={14}/>
-            </button>
-            <button onClick={() => setIsSettingsOpen(true)} className="h-8 px-2 flex items-center justify-center text-sci-text/80 hover:text-sci-cyan transition-all hover:opacity-100" title="神经核心配置">
-              <Settings2 size={14}/>
-            </button>
             {window.innerWidth < 1024 && (
               <button 
                 onClick={() => useSSHStore.getState().setIsAIPanelOpen(false)} 

@@ -34,6 +34,27 @@ describe('OperationLogsService', () => {
     expect(service.findAll({ limit: 1 })).toEqual([first]);
   });
 
+  it('persists the server IP and exposes the creation time', () => {
+    const log = service.create({
+      timestamp: '10:00:00',
+      type: 'info',
+      content: 'connected',
+      serverId: 'server-1',
+      serverIp: '10.0.0.8',
+    } as never);
+
+    expect(log).toEqual(expect.objectContaining({
+      serverIp: '10.0.0.8',
+      createdAt: expect.any(String),
+    }));
+    expect(service.findAll({})).toEqual([
+      expect.objectContaining({
+        serverIp: '10.0.0.8',
+        createdAt: expect.any(String),
+      }),
+    ]);
+  });
+
   it('filters and clears logs by server', () => {
     service.create({ timestamp: '10:00:01', type: 'info', content: 'one', serverId: 'server-1' });
     service.create({ timestamp: '10:00:02', type: 'warning', content: 'two', serverId: 'server-2' });
@@ -42,6 +63,27 @@ describe('OperationLogsService', () => {
     expect(service.clear('server-1')).toEqual({ deleted: 1 });
     expect(service.findAll({})).toEqual([expect.objectContaining({ serverId: 'server-2' })]);
     expect(service.clear()).toEqual({ deleted: 1 });
+  });
+
+  it('filters logs by their connection session', () => {
+    service.create({
+      timestamp: '10:00:01',
+      type: 'command',
+      content: '$ uptime',
+      serverId: 'server-1',
+      sessionId: 'session-1',
+    } as never);
+    service.create({
+      timestamp: '10:01:01',
+      type: 'command',
+      content: '$ free',
+      serverId: 'server-1',
+      sessionId: 'session-2',
+    } as never);
+
+    expect(service.findAll({ sessionId: 'session-1' })).toEqual([
+      expect.objectContaining({ content: '$ uptime', sessionId: 'session-1' }),
+    ]);
   });
 
   it.each([

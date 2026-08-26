@@ -10,6 +10,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { SshService, SshConnectionConfig } from './ssh.service';
 import { DatabaseService } from '../database/database.service';
+import { ConnectionSessionsService } from '../connection-sessions/connection-sessions.service';
 
 @WebSocketGateway({
   cors: {
@@ -23,6 +24,7 @@ export class SshGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly sshService: SshService,
     private readonly databaseService: DatabaseService,
+    private readonly connectionSessionsService: ConnectionSessionsService,
   ) {}
 
   handleConnection(client: Socket) {
@@ -43,8 +45,23 @@ export class SshGateway implements OnGatewayConnection, OnGatewayDisconnect {
       config.serverId.split('#')[0],
     );
     if (!savedTarget || !savedTarget.password) {
+      if (savedTarget && config.auditSessionId) {
+        this.connectionSessionsService.start({
+          id: config.auditSessionId,
+          serverId: config.serverId.split('#')[0],
+          deviceName: savedTarget.name,
+          serverIp: savedTarget.host,
+          username: savedTarget.username,
+        });
+        this.connectionSessionsService.finish(
+          config.auditSessionId,
+          'failed',
+          '服务器凭据未在后端配置，请先保存密码',
+        );
+      }
       this.server.to(client.id).emit('ssh-error', {
         serverId: config.serverId,
+        sessionId: config.auditSessionId,
         errorType: 'missing_credential',
         message: '服务器凭据未在后端配置，请先保存密码',
         retryable: false,
@@ -59,6 +76,8 @@ export class SshGateway implements OnGatewayConnection, OnGatewayDisconnect {
       port: savedTarget.port,
       username: savedTarget.username,
       password: savedTarget.password,
+      auditServerId: config.serverId.split('#')[0],
+      deviceName: savedTarget.name,
     };
     console.log(
       `Client ${client.id} requesting connection to ${resolvedConfig.ip} (Server: ${resolvedConfig.serverId})`,
@@ -123,6 +142,6 @@ export class SshGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { serverId: string },
   ) {
-    this.sshService.disconnect(client.id, payload.serverId);
+    this.sshService.disconnect(client.id, payload.serverId, this.server);
   }
 }

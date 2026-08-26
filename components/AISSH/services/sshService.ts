@@ -3,6 +3,7 @@ import { LogEntry } from "../types";
 
 export interface SSHStatus {
   serverId: string;
+  sessionId?: string;
   status: "connected" | "connecting" | "disconnected" | "error";
   message?: string;
   attempt?: number;
@@ -22,6 +23,7 @@ class SSHConnection {
   private socket: Socket;
   private connectionGeneration = 0;
   private readonly activeSessions = new Set<string>();
+  private readonly auditSessionIds = new Map<string, string>();
   private readonly dataListeners = new Set<
     (data: string, serverId: string) => void
   >();
@@ -75,13 +77,18 @@ class SSHConnection {
   disconnect(serverId: string): void {
     this.cancelPendingConnection(serverId, "连接已由用户取消");
     this.activeSessions.delete(serverId);
-    if (this.socket.connected) this.socket.emit("ssh-disconnect", { serverId });
+    if (this.socket.connected) {
+      this.socket.emit("ssh-disconnect", { serverId });
+      return;
+    }
     this.emitStatus({
       serverId,
+      sessionId: this.auditSessionIds.get(serverId),
       status: "disconnected",
       stage: "disconnected",
       message: "已断开连接",
     });
+    this.auditSessionIds.delete(serverId);
   }
 
   async executeCommand(command: string, serverId: string): Promise<string> {
@@ -153,9 +160,12 @@ class SSHConnection {
     connectionId: string,
   ): Promise<void> {
     const generation = ++this.connectionGeneration;
+    const sessionId = crypto.randomUUID();
     this.activeSessions.add(connectionId);
+    this.auditSessionIds.set(connectionId, sessionId);
     this.emitStatus({
       serverId: connectionId,
+      sessionId,
       status: "connecting",
       stage: "backend",
       message: "正在连接 SSH 后端",
@@ -174,7 +184,11 @@ class SSHConnection {
       await this.ensureSocketConnected();
       if (this.pendingConnections.get(connectionId)?.generation !== generation)
         return result;
-      this.socket.emit("ssh-connect", { serverId, connectionId });
+      this.socket.emit("ssh-connect", {
+        serverId,
+        connectionId,
+        auditSessionId: sessionId,
+      });
     } catch (error) {
       if (
         this.pendingConnections.get(connectionId)?.generation === generation
@@ -185,6 +199,7 @@ class SSHConnection {
           error instanceof Error ? error.message : "SSH 后端连接失败";
         this.emitStatus({
           serverId: connectionId,
+          sessionId,
           status: "error",
           stage: "backend",
           message,
@@ -207,6 +222,7 @@ class SSHConnection {
         this.cancelPendingConnection(serverId, `SSH 后端已断开：${reason}`);
         this.emitStatus({
           serverId,
+          sessionId: this.auditSessionIds.get(serverId),
           status: "error",
           stage: "backend",
           message: `SSH 后端已断开：${reason}`,
@@ -215,15 +231,18 @@ class SSHConnection {
         });
       }
       this.activeSessions.clear();
+      this.auditSessionIds.clear();
     });
-    this.socket.on("ssh-data", (data: { serverId: string; data: string }) => {
+    this.socket.on("ssh-data", (data: { serverId: string; sessionId?: string; data: string }) => {
+      if (!this.isCurrentAuditSession(data.serverId, data.sessionId)) return;
       this.writeRaw(data.data, data.serverId);
       data.data.split("\n").forEach((line) => {
         if (line.trim())
-          this.emitLog("info", line.replace(/\r/g, ""), data.serverId);
+          this.emitLog("info", line.replace(/\r/g, ""), data.serverId, data.sessionId);
       });
     });
     this.socket.on("ssh-status", (status: SSHStatus) => {
+      if (!this.isCurrentAuditSession(status.serverId, status.sessionId)) return;
       if (status.status === "connected") {
         this.pendingConnections.get(status.serverId)?.resolve();
         this.pendingConnections.delete(status.serverId);
@@ -235,11 +254,15 @@ class SSHConnection {
           status.message ?? "SSH 连接已断开",
         );
       }
-      if (status.message) this.emitLog("info", status.message, status.serverId);
+      if (status.message) this.emitLog("info", status.message, status.serverId, status.sessionId);
       this.emitStatus(status);
+      if (status.status === "disconnected") {
+        this.auditSessionIds.delete(status.serverId);
+      }
     });
     this.socket.on("ssh-error", (error: Omit<SSHStatus, "status">) => {
       const status: SSHStatus = { ...error, status: "error" };
+      if (!this.isCurrentAuditSession(status.serverId, status.sessionId)) return;
       if (status.final) {
         this.activeSessions.delete(status.serverId);
         this.cancelPendingConnection(
@@ -247,12 +270,13 @@ class SSHConnection {
           status.message ?? "SSH 连接失败",
         );
       }
-      this.emitLog("error", status.message ?? "SSH 连接失败", status.serverId);
+      this.emitLog("error", status.message ?? "SSH 连接失败", status.serverId, status.sessionId);
       this.writeRaw(
         `\r\n\x1b[31m[错误] ${status.message ?? "SSH 连接失败"}\x1b[0m\r\n`,
         status.serverId,
       );
       this.emitStatus(status);
+      if (status.final) this.auditSessionIds.delete(status.serverId);
     });
   }
 
@@ -303,18 +327,24 @@ class SSHConnection {
     type: LogEntry["type"],
     content: string,
     serverId: string,
+    sessionId = this.auditSessionIds.get(serverId),
   ): void {
     const log: LogEntry = {
       timestamp: new Date().toLocaleTimeString(),
       type,
       content,
       serverId,
+      ...(sessionId ? { sessionId } : {}),
     };
     this.logListeners.forEach((listener) => listener(log));
   }
 
   private emitStatus(status: SSHStatus): void {
     this.statusListeners.forEach((listener) => listener(status));
+  }
+
+  private isCurrentAuditSession(serverId: string, sessionId?: string): boolean {
+    return !sessionId || this.auditSessionIds.get(serverId) === sessionId;
   }
 }
 

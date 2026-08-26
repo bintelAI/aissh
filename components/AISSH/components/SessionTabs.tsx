@@ -195,7 +195,7 @@ export const SessionTabs: React.FC = () => {
                       const state = useSSHStore.getState();
                       const newId = state.activeSessionId as string;
                       const temp = state.tempSessions[newId];
-                      if (temp && temp.password) {
+                      if (temp?.hasCredential || temp?.password) {
                         updateConnectionState(newId, "connecting");
                         void sshManager
                           .connect(temp.baseId, newId)

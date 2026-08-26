@@ -15,8 +15,9 @@ export class OperationLogsController {
   findAll(
     @Query('limit') limit?: string,
     @Query('serverId') serverId?: string,
+    @Query('sessionId') sessionId?: string,
   ): StoredOperationLog[] {
-    return this.operationLogsService.findAll({ limit, serverId });
+    return this.operationLogsService.findAll({ limit, serverId, sessionId });
   }
 
   @Delete()

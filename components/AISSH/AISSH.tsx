@@ -34,6 +34,11 @@ import { MonacoEditor } from "./components/FileEditor/MonacoEditor";
 import { FileBrowser } from "./components/FileEditor/FileBrowser";
 import { FileOperations } from "./components/FileEditor/FileOperations";
 import { FileTabs } from "./components/FileEditor/FileTabs";
+import { AppNavigation } from "./components/AppNavigation";
+import type { AppView } from "./components/appLayout";
+import { shouldShowServerTree } from "./components/appLayout";
+import { OperationLogView } from "./components/OperationLogView";
+import { SettingsView } from "./components/SettingsView";
 import { Terminal, Sparkles, Cpu, Activity, PanelLeft } from "lucide-react";
 import { CyberBackground } from "./common/CyberBackground";
 import { HackerStandby } from "./components/HackerStandby";
@@ -76,6 +81,7 @@ const AISSH: React.FC = () => {
     resetFailureCount,
     incrementFailureCount,
     setIsAIPanelOpen,
+    setLogs,
   } = useSSHStore(
     useShallow((s) => ({
       setActiveSessionId: s.setActiveSessionId,
@@ -89,14 +95,25 @@ const AISSH: React.FC = () => {
       updateFolder: s.updateFolder,
       deleteFolder: s.deleteFolder,
       resetFailureCount: s.resetFailureCount,
-      incrementFailureCount: s.incrementFailureCount,
-      setIsAIPanelOpen: s.setIsAIPanelOpen,
-    })),
+        incrementFailureCount: s.incrementFailureCount,
+        setIsAIPanelOpen: s.setIsAIPanelOpen,
+        setLogs: s.setLogs,
+      })),
   );
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [isMobileServerPanelOpen, setIsMobileServerPanelOpen] = useState(false);
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
+  const [appView, setAppView] = useState<AppView>("workspace");
+  const [isLogHistoryLoading, setIsLogHistoryLoading] = useState(false);
+  const [connectionSessionVersion, setConnectionSessionVersion] = useState(0);
+  const isWorkspace = appView === "workspace";
+  const showServerTree = shouldShowServerTree(appView);
+
+  const handleAppViewChange = (view: AppView) => {
+    setAppView(view);
+    if (view !== "workspace") setIsMobileServerPanelOpen(false);
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -107,6 +124,25 @@ const AISSH: React.FC = () => {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [isAIPanelOpen, setIsAIPanelOpen]);
+
+  useEffect(() => {
+    if (appView !== "logs") return;
+    let disposed = false;
+    setIsLogHistoryLoading(true);
+    void loadOperationLogs(5_000)
+      .then((history) => {
+        if (!disposed) setLogs(history);
+      })
+      .catch((error) => {
+        console.error("Failed to load operation log history:", error);
+      })
+      .finally(() => {
+        if (!disposed) setIsLogHistoryLoading(false);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [appView, setLogs]);
 
   const { fileSessions, activeFileSessionId } = useFileStore(
     useShallow((s) => ({
@@ -251,6 +287,7 @@ const AISSH: React.FC = () => {
     });
 
     const unsubStatus = sshManager.onStatus((status) => {
+      setConnectionSessionVersion((version) => version + 1);
       let mappedStatus: "connected" | "disconnected" | "connecting" | "error" =
         "disconnected";
       if (status.status === "connected") {
@@ -489,14 +526,16 @@ const AISSH: React.FC = () => {
       {/* 动态赛博背景 */}
       <CyberBackground />
 
+      <AppNavigation activeView={appView} onChange={handleAppViewChange} />
+
       {/* Sidebar Area */}
-      <motion.div
+      {showServerTree && <motion.div
         style={{
           width: isMobile
             ? Math.min(leftWidth, window.innerWidth * 0.85)
             : leftWidth,
         }}
-        className={`select-none z-40 ${isMobile ? "fixed inset-y-0 left-0 shadow-2xl" : "flex-shrink-0 relative z-10"}`}
+        className={`select-none z-40 ${isMobile ? "fixed inset-y-0 left-14 shadow-2xl" : "flex-shrink-0 relative z-10"}`}
         initial={false}
         animate={{
           x: isMobile && !isMobileServerPanelOpen ? "-100%" : 0,
@@ -574,9 +613,9 @@ const AISSH: React.FC = () => {
             void sshManager.retry(serverId).catch(() => undefined);
           }}
         />
-      </motion.div>
+      </motion.div>}
 
-      {isMobile && isMobileServerPanelOpen && (
+      {showServerTree && isMobile && isMobileServerPanelOpen && (
         <button
           aria-label="关闭节点列表"
           className="fixed inset-0 z-30 bg-black/50"
@@ -584,7 +623,7 @@ const AISSH: React.FC = () => {
         />
       )}
 
-      <div
+      {showServerTree && <div
         className={`${isMobile ? "hidden" : "flex"} w-px bg-sci-cyan/10 hover:bg-sci-cyan cursor-col-resize transition-colors items-center justify-center group z-10`}
         onMouseDown={() => {
           isResizingLeft.current = true;
@@ -592,11 +631,11 @@ const AISSH: React.FC = () => {
         }}
       >
         <div className="absolute w-4 h-full"></div>
-      </div>
+      </div>}
 
       {/* Main Area */}
       <div className="flex-1 flex flex-col min-w-0 bg-transparent relative h-screen">
-        <div className="flex items-center justify-between pr-4 bg-sci-obsidian/20 backdrop-blur-sm border-b border-white/5">
+        <div className={`${isWorkspace ? "flex" : "hidden"} items-center justify-between pr-4 bg-sci-obsidian/20 backdrop-blur-sm border-b border-white/5`}>
           <SessionTabs />
           <div className="flex items-center gap-2 ml-auto">
             {isMobile && (
@@ -662,7 +701,7 @@ const AISSH: React.FC = () => {
 
         {/* Terminal Area */}
         <div
-          className={`flex-1 flex flex-col min-w-0 ${!activeSessionId || isFileSession ? "hidden" : "flex"}`}
+          className={`flex-1 flex flex-col min-w-0 ${!isWorkspace || !activeSessionId || isFileSession ? "hidden" : "flex"}`}
         >
           <TerminalArea
             commandToInsert={commandToInsert}
@@ -672,7 +711,7 @@ const AISSH: React.FC = () => {
         </div>
 
         {/* File Editor Area */}
-        {activeSessionId && isFileSession && (
+        {isWorkspace && activeSessionId && isFileSession && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -733,7 +772,7 @@ const AISSH: React.FC = () => {
           </motion.div>
         )}
 
-        {!activeSessionId && (
+        {isWorkspace && !activeSessionId && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -743,9 +782,19 @@ const AISSH: React.FC = () => {
             <HackerStandby />
           </motion.div>
         )}
+
+        {appView === "logs" && (
+          <OperationLogView
+            logs={logs}
+            servers={servers}
+            isLoading={isLogHistoryLoading}
+            sessionVersion={connectionSessionVersion}
+          />
+        )}
+        {appView === "settings" && <SettingsView />}
       </div>
 
-      {isAIPanelOpen && (
+      {isWorkspace && isAIPanelOpen && (
         <div
           className={`${isMobile ? "hidden" : "flex"} w-px bg-sci-cyan/10 hover:bg-sci-cyan cursor-col-resize transition-colors items-center justify-center group z-10`}
           onMouseDown={() => {
@@ -758,7 +807,7 @@ const AISSH: React.FC = () => {
       )}
 
       {/* AI Panel Area */}
-      <motion.div
+      {isWorkspace && <motion.div
         style={{
           width: isAIPanelOpen
             ? isMobile
@@ -792,7 +841,7 @@ const AISSH: React.FC = () => {
             </motion.div>
           )}
         </AnimatePresence>
-      </motion.div>
+      </motion.div>}
 
       {isAddModalOpen && (
         <AddServerModal

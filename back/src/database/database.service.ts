@@ -122,6 +122,41 @@ const migrations: Migration[] = [
         ON ai_chat_messages(session_id, created_at ASC);
     `,
   },
+  {
+    version: 5,
+    sql: `
+      ALTER TABLE operation_logs ADD COLUMN server_ip TEXT;
+    `,
+  },
+  {
+    version: 6,
+    sql: `
+      CREATE TABLE IF NOT EXISTS connection_sessions (
+        id TEXT PRIMARY KEY,
+        server_id TEXT NOT NULL,
+        device_name TEXT NOT NULL,
+        server_ip TEXT NOT NULL,
+        username TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        connected_at TEXT,
+        ended_at TEXT,
+        status TEXT NOT NULL CHECK (status IN ('connecting', 'connected', 'disconnected', 'failed')),
+        end_reason TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_connection_sessions_started_at
+        ON connection_sessions(started_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_connection_sessions_server_id
+        ON connection_sessions(server_id, started_at DESC);
+    `,
+  },
+  {
+    version: 7,
+    sql: `
+      ALTER TABLE operation_logs ADD COLUMN session_id TEXT;
+      CREATE INDEX IF NOT EXISTS idx_operation_logs_session_id
+        ON operation_logs(session_id, created_at ASC);
+    `,
+  },
 ];
 
 @Injectable()
@@ -158,17 +193,17 @@ export class DatabaseService implements OnModuleDestroy {
     return row ? (JSON.parse(row.value_json) as T) : null;
   }
 
-  findServer(serverId: string): { host: string; port: number; username: string; password?: string } | null {
+  findServer(serverId: string): { name: string; host: string; port: number; username: string; password?: string } | null {
     const row = this.database
-      .prepare('SELECT host, port, username, password FROM servers WHERE id = ?')
-      .get(serverId) as { host: string; port: number; username: string; password: string | null } | undefined;
+      .prepare('SELECT name, host, port, username, password FROM servers WHERE id = ?')
+      .get(serverId) as { name: string; host: string; port: number; username: string; password: string | null } | undefined;
     if (row?.password) {
       const password = this.secrets.decrypt(row.password);
       if (password) {
-        return { host: row.host, port: row.port, username: row.username, password };
+        return { name: row.name, host: row.host, port: row.port, username: row.username, password };
       }
     }
-    if (row) return { host: row.host, port: row.port, username: row.username };
+    if (row) return { name: row.name, host: row.host, port: row.port, username: row.username };
     return row ?? null;
   }
 

@@ -14,7 +14,7 @@ describe('DatabaseService', () => {
     const reopened = new DatabaseService(appDataDirectory);
 
     expect(reopened.getPreference('selectedPromptIds')).toEqual(['p-linux']);
-    expect(reopened.migrationVersions()).toEqual([1, 2, 3, 4]);
+    expect(reopened.migrationVersions()).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(
       reopened.connection
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('operation_logs', 'ai_chat_sessions', 'ai_chat_messages') ORDER BY name")
@@ -24,6 +24,11 @@ describe('DatabaseService', () => {
       { name: 'ai_chat_sessions' },
       { name: 'operation_logs' },
     ]);
+    expect(
+      reopened.connection
+        .prepare("SELECT name FROM pragma_table_info('operation_logs') WHERE name = 'server_ip'")
+        .get(),
+    ).toEqual(expect.objectContaining({ name: 'server_ip' }));
     reopened.close();
   });
 
@@ -38,6 +43,7 @@ describe('DatabaseService', () => {
       .run('server-1', 'Web 01', '10.0.0.1', 2222, 'root', 'plain-password', new Date().toISOString(), new Date().toISOString());
 
     expect(database.findServer('server-1')).toEqual({
+      name: 'Web 01',
       host: '10.0.0.1',
       port: 2222,
       username: 'root',

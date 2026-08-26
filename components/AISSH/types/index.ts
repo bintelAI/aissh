@@ -25,9 +25,38 @@ export interface Folder {
 
 export interface LogEntry {
   timestamp: string;
+  createdAt?: string;
   type: "info" | "error" | "warning" | "command" | "ai-action" | "ai-thought";
   content: string;
   serverId: string;
+  serverIp?: string;
+  sessionId?: string;
+}
+
+export type ConnectionSessionStatus =
+  | 'connecting'
+  | 'connected'
+  | 'disconnected'
+  | 'failed';
+
+export interface ConnectionSession {
+  id: string;
+  serverId: string;
+  deviceName: string;
+  serverIp: string;
+  username: string;
+  startedAt: string;
+  connectedAt?: string;
+  endedAt?: string;
+  status: ConnectionSessionStatus;
+  endReason?: string;
+}
+
+export interface ConnectionSessionPage {
+  items: ConnectionSession[];
+  page: number;
+  pageSize: number;
+  total: number;
 }
 
 export type ChatRole = "user" | "assistant" | "system";

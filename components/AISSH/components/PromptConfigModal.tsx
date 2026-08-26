@@ -7,7 +7,8 @@ import { PromptNode } from '../types';
 import { CyberSelect } from '../common/CyberSelect';
 
 interface PromptConfigModalProps {
-  onClose: () => void;
+  onClose?: () => void;
+  embedded?: boolean;
 }
 
 const colorOptions = [
@@ -21,7 +22,7 @@ const colorOptions = [
   { value: 'white', label: '白色' }
 ];
 
-export const PromptConfigModal: React.FC<PromptConfigModalProps> = ({ onClose }) => {
+export const PromptConfigModal: React.FC<PromptConfigModalProps> = ({ onClose, embedded = false }) => {
   const {
     promptTree,
     selectedPromptIds,
@@ -90,22 +91,21 @@ export const PromptConfigModal: React.FC<PromptConfigModalProps> = ({ onClose })
     addRule(selectedNodeId, { pattern: '', color: 'cyan', remark: '' });
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
-      <div className="w-full max-w-5xl bg-sci-obsidian border border-sci-cyan/30 clip-corner drop-shadow-[0_0_40px_rgba(0,243,255,0.18)] max-h-[90vh] flex flex-col">
+  const content = (
+      <div className={`bg-sci-obsidian border border-sci-cyan/30 clip-corner drop-shadow-[0_0_40px_rgba(0,243,255,0.18)] flex flex-col ${embedded ? 'h-full min-h-0' : 'w-full max-w-5xl max-h-[90vh]'}`}>
         <div className="p-4 border-b border-white/10 flex items-center justify-between bg-sci-panel/50">
           <div className="text-xs font-sci font-bold text-sci-text uppercase tracking-widest">
             设备类型提示语配置 (树形结构)
           </div>
-          <button
+          {!embedded && <button
             onClick={onClose}
             className="p-1.5 hover:bg-white/5 text-sci-text/60 hover:text-sci-red transition-colors"
           >
             <X size={18} />
-          </button>
+          </button>}
         </div>
 
-        <div className="flex-1 grid grid-cols-[320px_1fr] gap-0 min-h-0">
+        <div className={`flex-1 grid gap-0 min-h-0 ${embedded ? 'grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)]' : 'grid-cols-[320px_1fr]'}`}>
           {/* 左侧树形结构 */}
           <div className="border-r border-white/10 flex flex-col">
             <div className="p-3 border-b border-white/10 flex items-center justify-between bg-black/20">
@@ -289,18 +289,26 @@ export const PromptConfigModal: React.FC<PromptConfigModalProps> = ({ onClose })
           </div>
         </div>
 
-        <div className="p-4 bg-sci-panel/50 border-t border-white/10">
+        {!embedded && <div className="p-4 bg-sci-panel/50 border-t border-white/10">
           <button
             onClick={onClose}
             className="w-full py-2 bg-sci-cyan text-black font-sci font-bold text-xs uppercase tracking-[0.2em] hover:bg-sci-cyan/80 transition-all clip-corner"
           >
             完成
           </button>
-        </div>
+        </div>}
       </div>
+  );
+
+  if (embedded) return content;
+  return createPortal(
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
+      {content}
     </div>,
-    document.body
+    document.body,
   );
 };
+
+export const PromptConfigEditor: React.FC = () => <PromptConfigModal embedded />;
 
 export default PromptConfigModal;

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Client, ClientChannel, ConnectConfig } from 'ssh2';
 import { Server } from 'socket.io';
+import { ConnectionSessionsService } from '../connection-sessions/connection-sessions.service';
 import {
   classifyConnectionError,
   getConnectionErrorMessage,
@@ -21,6 +22,9 @@ export class SshConnectionConfig {
   passphrase?: string;
   serverId: string;
   connectionId?: string;
+  auditSessionId?: string;
+  auditServerId?: string;
+  deviceName?: string;
   algorithms?: ConnectConfig['algorithms'];
   hostVerifier?: ConnectConfig['hostVerifier'];
 }
@@ -34,6 +38,7 @@ interface ManagedSession {
   retryTimer?: ReturnType<typeof setTimeout>;
   state: SessionState;
   stream?: ClientChannel;
+  auditSessionId?: string;
 }
 
 @Injectable()
@@ -43,8 +48,17 @@ export class SshService {
   private createClient: () => Client = () => new Client();
   private generation = 0;
 
-  static createForTesting(createClient: () => Client): SshService {
-    const service = new SshService();
+  constructor(private readonly connectionSessionsService: ConnectionSessionsService) {}
+
+  static createForTesting(
+    createClient: () => Client,
+    connectionSessionsService: Pick<ConnectionSessionsService, 'start' | 'markConnected' | 'finish'> = {
+      start: () => undefined as never,
+      markConnected: () => undefined as never,
+      finish: () => undefined as never,
+    },
+  ): SshService {
+    const service = new SshService(connectionSessionsService as ConnectionSessionsService);
     service.createClient = createClient;
     return service;
   }
@@ -55,14 +69,26 @@ export class SshService {
     server: Server,
   ): void {
     const sessionKey = this.getSessionKey(socketId, config.serverId);
+    const previous = this.sessions.get(sessionKey);
+    if (previous) this.finishAuditSession(previous, 'disconnected', '连接被新的请求替换');
     this.cancelSession(sessionKey);
 
     const session: ManagedSession = {
       attempt: 0,
       generation: ++this.generation,
       state: 'connecting',
+      auditSessionId: config.auditSessionId,
     };
     this.sessions.set(sessionKey, session);
+    if (config.auditSessionId && config.auditServerId && config.deviceName) {
+      this.connectionSessionsService.start({
+        id: config.auditSessionId,
+        serverId: config.auditServerId,
+        deviceName: config.deviceName,
+        serverIp: config.ip,
+        username: config.username,
+      });
+    }
     this.startAttempt(sessionKey, session, socketId, config, server);
   }
 
@@ -110,14 +136,26 @@ export class SshService {
     });
   }
 
-  disconnect(socketId: string, serverId: string): void {
+  disconnect(socketId: string, serverId: string, server?: Server): void {
     const sessionKey = this.getSessionKey(socketId, serverId);
-    if (!this.cancelSession(sessionKey)) return;
+    const session = this.sessions.get(sessionKey);
+    if (!session || !this.cancelSession(sessionKey)) return;
+    this.finishAuditSession(session, 'disconnected', '用户主动断开');
+    if (server) {
+      this.emitStatus(server, socketId, serverId, 'disconnected', {
+        attempt: session.attempt,
+        stage: 'disconnected',
+        message: '用户主动断开',
+      }, session.auditSessionId);
+    }
   }
 
   disconnectAll(socketId: string): void {
     for (const key of [...this.sessions.keys()]) {
-      if (key.startsWith(`${socketId}:`)) this.cancelSession(key);
+      if (!key.startsWith(`${socketId}:`)) continue;
+      const session = this.sessions.get(key);
+      if (session) this.finishAuditSession(session, 'disconnected', '客户端已断开');
+      this.cancelSession(key);
     }
   }
 
@@ -146,7 +184,7 @@ export class SshService {
         attempt === 1
           ? '正在建立 SSH 连接'
           : `正在进行第 ${attempt} 次连接尝试`,
-    });
+    }, session.auditSessionId);
 
     const fail = (error: unknown, errorType?: SshErrorType): void => {
       if (
@@ -293,11 +331,14 @@ export class SshService {
         session.stream = stream;
         session.state = 'connected';
         onReady();
+        if (session.auditSessionId) {
+          this.connectionSessionsService.markConnected(session.auditSessionId);
+        }
         this.emitStatus(server, socketId, config.serverId, 'connected', {
           attempt: session.attempt,
           stage: 'ready',
           message: `已连接到 ${config.ip}`,
-        });
+        }, session.auditSessionId);
 
         stream.on('close', () => {
           if (!this.isActive(sessionKey, session) || session.stream !== stream)
@@ -315,6 +356,7 @@ export class SshService {
           if (this.isActive(sessionKey, session)) {
             server.to(socketId).emit('ssh-data', {
               serverId: config.serverId,
+              sessionId: session.auditSessionId,
               data: data.toString('utf-8'),
             });
           }
@@ -323,6 +365,7 @@ export class SshService {
           if (this.isActive(sessionKey, session)) {
             server.to(socketId).emit('ssh-data', {
               serverId: config.serverId,
+              sessionId: session.auditSessionId,
               data: data.toString('utf-8'),
             });
           }
@@ -343,8 +386,10 @@ export class SshService {
     if (!retryable) {
       this.sessions.delete(sessionKey);
       session.client?.end();
+      this.finishAuditSession(session, 'failed', getConnectionErrorMessage(errorType));
       server.to(socketId).emit('ssh-error', {
         serverId: config.serverId,
+        sessionId: session.auditSessionId,
         errorType,
         message: getConnectionErrorMessage(errorType),
         retryable: isRetryableConnectionError(errorType),
@@ -359,7 +404,7 @@ export class SshService {
       attempt: session.attempt,
       stage: 'retrying',
       message: `${getConnectionErrorMessage(errorType)}，${Math.ceil(delay / 1000)} 秒后重试`,
-    });
+    }, session.auditSessionId);
     session.client?.end();
     session.client = undefined;
     session.retryTimer = setTimeout(() => {
@@ -376,11 +421,12 @@ export class SshService {
   ): void {
     if (!this.isActive(sessionKey, session)) return;
     this.sessions.delete(sessionKey);
+    this.finishAuditSession(session, 'disconnected', 'SSH 连接已断开，请手动重试');
     this.emitStatus(server, socketId, serverId, 'disconnected', {
       attempt: session.attempt,
       stage: 'disconnected',
       message: 'SSH 连接已断开，请手动重试',
-    });
+    }, session.auditSessionId);
   }
 
   private cancelSession(sessionKey: string): boolean {
@@ -399,8 +445,24 @@ export class SshService {
     serverId: string,
     status: 'connecting' | 'connected' | 'disconnected',
     details: { attempt: number; stage: string; message?: string },
+    sessionId?: string,
   ): void {
-    server.to(socketId).emit('ssh-status', { serverId, status, ...details });
+    server.to(socketId).emit('ssh-status', {
+      serverId,
+      status,
+      ...details,
+      ...(sessionId ? { sessionId } : {}),
+    });
+  }
+
+  private finishAuditSession(
+    session: ManagedSession,
+    status: 'disconnected' | 'failed',
+    reason: string,
+  ): void {
+    if (session.auditSessionId) {
+      this.connectionSessionsService.finish(session.auditSessionId, status, reason);
+    }
   }
 
   private isActive(sessionKey: string, session: ManagedSession): boolean {

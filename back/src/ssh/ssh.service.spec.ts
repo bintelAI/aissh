@@ -103,6 +103,49 @@ describe('SshService', () => {
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
+  it('records and reports a user-initiated disconnect', () => {
+    const client = new FakeClient();
+    const sessions = {
+      start: jest.fn(),
+      markConnected: jest.fn(),
+      finish: jest.fn(),
+    };
+    const service = SshService.createForTesting(
+      () => client as unknown as Client,
+      sessions as never,
+    );
+    const { server, emit } = createServer();
+    const connection = {
+      ...config,
+      auditSessionId: 'audit-1',
+      auditServerId: 'server-1',
+      deviceName: 'Production API',
+    };
+
+    service.createConnection('socket-1', connection, server);
+    service.disconnect('socket-1', connection.serverId, server);
+
+    expect(sessions.start).toHaveBeenCalledWith({
+      id: 'audit-1',
+      serverId: 'server-1',
+      deviceName: 'Production API',
+      serverIp: '10.0.0.1',
+      username: 'root',
+    });
+    expect(sessions.finish).toHaveBeenCalledWith(
+      'audit-1',
+      'disconnected',
+      '用户主动断开',
+    );
+    expect(emit).toHaveBeenLastCalledWith(
+      'ssh-status',
+      expect.objectContaining({
+        status: 'disconnected',
+        sessionId: 'audit-1',
+      }),
+    );
+  });
+
   it('does not report connected until the interactive shell is ready', () => {
     const client = new FakeClient();
     const stream = new EventEmitter() as ClientChannel;

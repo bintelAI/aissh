@@ -34,6 +34,7 @@ interface SSHState {
       ip: string;
       username: string;
       password?: string;
+      hasCredential?: boolean;
       baseId: string;
     }
   >;
@@ -363,6 +364,7 @@ export const useSSHStore = create<SSHState>((set) => ({
         ip: src.ip,
         username: src.username,
         password: src.password,
+        hasCredential: src.hasCredential,
         baseId,
       };
       const openSessions = [...state.openSessions, newId];
@@ -379,8 +381,22 @@ export const useSSHStore = create<SSHState>((set) => ({
     }),
 
   addLog: (log) => {
-    set((state) => ({ logs: [...state.logs, log] }));
-    void appendOperationLog(log).catch((error) => {
+    let persistedLog: LogEntry | undefined;
+    set((state) => {
+      const serverId = log.serverId.split("#")[0];
+      const server = state.servers.find((item) => item.id === serverId);
+      const temporarySession =
+        state.tempSessions[log.serverId] ?? state.tempSessions[serverId];
+      persistedLog = {
+        ...log,
+        createdAt: log.createdAt ?? new Date().toISOString(),
+        ...(log.serverIp || !server?.ip && !temporarySession?.ip
+          ? {}
+          : { serverIp: server?.ip ?? temporarySession?.ip }),
+      };
+      return { logs: [...state.logs, persistedLog] };
+    });
+    void appendOperationLog(persistedLog!).catch((error) => {
       console.error("Failed to persist operation log:", error);
     });
   },

@@ -14,6 +14,8 @@ export interface CreateOperationLogInput {
   type: unknown;
   content: unknown;
   serverId: unknown;
+  serverIp?: unknown;
+  sessionId?: unknown;
 }
 
 export interface StoredOperationLog {
@@ -22,4 +24,7 @@ export interface StoredOperationLog {
   type: OperationLogType;
   content: string;
   serverId: string;
+  serverIp?: string;
+  sessionId?: string;
+  createdAt: string;
 }

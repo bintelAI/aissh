@@ -1,11 +1,17 @@
 import { LogEntry } from '../types';
 
-interface StoredOperationLog extends LogEntry {
+export interface StoredOperationLog extends LogEntry {
   id: string;
+  createdAt: string;
 }
 
-export async function loadOperationLogs(limit = 1_000): Promise<LogEntry[]> {
-  return request<StoredOperationLog[]>(`/api/v1/operation-logs?limit=${limit}`);
+export async function loadOperationLogs(
+  limit = 1_000,
+  sessionId?: string,
+): Promise<LogEntry[]> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (sessionId) query.set('sessionId', sessionId);
+  return request<StoredOperationLog[]>(`/api/v1/operation-logs?${query}`);
 }
 
 export async function appendOperationLog(log: LogEntry): Promise<void> {
