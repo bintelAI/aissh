@@ -38,10 +38,10 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
           { token: 'number', foreground: '79b8ff' },
         ],
         colors: {
-          'editor.background': '#0d1117',
+          'editor.background': '#11161d',
           'editor.foreground': '#c9d1d9',
           'editorCursor.foreground': '#00f3ff',
-          'editor.lineHighlightBackground': '#161b22',
+          'editor.lineHighlightBackground': '#1a2129',
           'editor.selectionBackground': 'rgba(0, 243, 255, 0.2)',
           'editor.inactiveSelectionBackground': 'rgba(0, 243, 255, 0.1)',
           'minimap.background': '#010409',
@@ -109,9 +109,9 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
   // I'll add an onChange prop to the interface and use it.
   
   return (
-    <div className="flex flex-col h-full bg-[#0d1117]">
+    <div className="flex flex-col h-full bg-[#11161d]">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-[#161b22]">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-[#1a2129]">
         <div className="flex items-center space-x-2 text-sm text-sci-text">
           <span className="opacity-50">{session.filePath}</span>
           {session.isModified && <span className="text-sci-yellow text-xs mx-2">● 已修改</span>}

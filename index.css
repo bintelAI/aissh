@@ -37,7 +37,7 @@
     font-family: 'JetBrains Mono', 'Fira Code', monospace;
   }
 
-  /* 全局滚动条样式适配赛博朋克风格 (Tauri/WebKit) */
+  /* 全局滚动条样式适配赛博朋克风格 (WebKit) */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;

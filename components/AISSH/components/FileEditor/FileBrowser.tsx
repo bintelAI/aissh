@@ -289,7 +289,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({ serverId, onFileOpen }
             </button>
             <div className="h-px bg-white/5 my-1" />
             <button 
-              className="w-full flex items-center px-3 py-2 text-xs hover:bg-red-500/10 text-red-400 transition-colors font-sci uppercase tracking-wide"
+              className="w-full flex items-center px-3 py-2 text-xs hover:bg-sci-red/10 text-sci-red transition-colors font-sci uppercase tracking-wide"
               onClick={() => {
                 if (contextMenu.file) handleDeleteFile(contextMenu.file);
                 setContextMenu(null);

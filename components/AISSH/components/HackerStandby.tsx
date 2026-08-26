@@ -105,7 +105,7 @@ const BootLogFeed: React.FC = () => {
 
 export const HackerStandby: React.FC = () => {
   return (
-    <section className="relative flex min-h-0 flex-1 overflow-hidden bg-[#030507] text-sci-text" aria-label="SSH 黑客待机模式">
+    <section className="relative flex min-h-0 flex-1 overflow-hidden bg-sci-base text-sci-text" aria-label="SSH 黑客待机模式">
       <MatrixRain />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(0,243,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(0,243,255,0.05)_1px,transparent_1px)] bg-[size:28px_28px]" />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(3,5,7,0)_50%,rgba(0,0,0,0.18)_50%)] bg-[length:100%_4px]" />

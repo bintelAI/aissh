@@ -94,7 +94,7 @@ export const FileTabs: React.FC = () => {
       {/* Context Menu */}
       {contextMenu && (
         <div 
-          className="fixed z-[100] bg-[#0a1622] border border-sci-cyan/30 rounded shadow-2xl py-1 min-w-[160px] backdrop-blur-md"
+          className="fixed z-[100] bg-sci-obsidian border border-sci-cyan/30 rounded shadow-2xl py-1 min-w-[160px] backdrop-blur-md"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e: React.MouseEvent) => e.stopPropagation()}
         >

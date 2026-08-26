@@ -1,8 +1,0 @@
-{
-  "name": "Gemini SSH 助手",
-  "description": "集成 AI 的多服务器 SSH 管理面板，支持实时日志分析和智能命令建议。",
-  "requestFramePermissions": [
-    "camera",
-    "microphone"
-  ]
-}

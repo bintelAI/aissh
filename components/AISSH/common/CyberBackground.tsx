@@ -5,7 +5,7 @@ export const CyberBackground: React.FC = () => {
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10 bg-sci-base">
       {/* Deep Space Background */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#1a1f2e] via-[#050505] to-[#000000] opacity-80"></div>
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#11161d] via-[#050505] to-[#000000] opacity-80"></div>
       
       {/* 3D Grid Floor */}
       <div 

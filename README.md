@@ -16,11 +16,11 @@
 
 
 
-# 🌌 方块 SSH 助手SSH 助手
+# 🌌 方块 SSH 助手
 
 **集成 AI 的赛博朋克风格现代化 Web SSH 客户端**
 
- 方块 SSH 助手是一款专为运维人员打造的现代化 Web SSH 客户端。它集成了 Google 方块 SSH 助手AI 能力，提供智能命令风险评估、运维辅助聊天以及极具科技感的“神经连接终端” (Neural Link Terminal) 风格界面，旨在提升服务器管理的效率与安全性。
+ 方块 SSH 助手是一款专为运维人员打造的现代化 Web SSH 客户端。它集成了 AI 能力，提供智能命令风险评估、运维辅助聊天以及极具科技感的“神经连接终端” (Neural Link Terminal) 风格界面，旨在提升服务器管理的效率与安全性。
 
 
 
@@ -42,7 +42,7 @@
 -   **状态管理**：Zustand
 -   **UI 体系**：Tailwind CSS + DaisyUI (自定义赛博朋克主题)
 -   **终端模拟**：xterm.js + 插件 (Canvas, Webgl, Fit, WebLinks)
--   **AI SDK**：OpenAI SDK (对接 方块 SSH 助手兼容接口)
+-   **AI SDK**：OpenAI 兼容接口（对接维表智联后端）
 
 ### 后端 (Backend)
 -   **核心框架**：NestJS 11

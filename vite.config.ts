@@ -28,7 +28,7 @@ export default defineConfig(() => {
                 'xterm-addon-web-links',
                 'xterm-addon-webgl'
               ],
-              'vendor-utils': ['socket.io-client', 'zustand', 'i18next', 'react-i18next'],
+              'vendor-utils': ['socket.io-client', 'zustand'],
               'vendor-ai': ['react-markdown', 'react-syntax-highlighter'],
               'vendor-ui': ['lucide-react']
             }

@@ -47,11 +47,11 @@ export const CyberSelect: React.FC<CyberSelectProps> = ({
   const baseColor = isCyan ? 'text-sci-cyan' : 'text-sci-violet';
   const borderColor = isCyan ? 'border-sci-cyan/30' : 'border-sci-violet/30';
   const triggerState = isCyan
-    ? 'border-sci-cyan/60 shadow-[0_0_0_3px_rgba(56,189,248,0.12)]'
-    : 'border-slate-500 shadow-[0_0_0_3px_rgba(148,163,184,0.1)]';
+    ? 'border-sci-cyan/60 shadow-[0_0_0_3px_rgba(0,243,255,0.12)]'
+    : 'border-sci-violet/60 shadow-[0_0_0_3px_rgba(188,19,254,0.12)]';
   const triggerHover = isCyan
-    ? 'hover:border-sci-cyan/60 hover:shadow-[0_0_0_3px_rgba(56,189,248,0.08)]'
-    : 'hover:border-slate-500 hover:shadow-[0_0_0_3px_rgba(148,163,184,0.08)]';
+    ? 'hover:border-sci-cyan/60 hover:shadow-[0_0_0_3px_rgba(0,243,255,0.08)]'
+    : 'hover:border-sci-violet/60 hover:shadow-[0_0_0_3px_rgba(188,19,254,0.08)]';
 
   return (
     <div 
@@ -67,7 +67,7 @@ export const CyberSelect: React.FC<CyberSelectProps> = ({
           setIsOpen(!isOpen);
         }}
         className={`
-          relative flex items-center rounded-md bg-sci-panel border border-slate-700/80 px-3 py-1.5 cursor-pointer
+          relative flex items-center rounded-md bg-sci-panel border border-white/10 px-3 py-1.5 cursor-pointer
           group transition-colors duration-150 ${isOpen ? triggerState : triggerHover}
         `}
       >
@@ -139,7 +139,7 @@ export const CyberSelect: React.FC<CyberSelectProps> = ({
                     px-3 py-2 text-xs font-medium cursor-pointer rounded-sm mx-1
                     flex items-center justify-between transition-colors select-none
                     ${value === option.value 
-                      ? (isCyan ? 'bg-sci-cyan/15 text-sci-cyan' : 'bg-slate-600/40 text-sci-text')
+                      ? (isCyan ? 'bg-sci-cyan/15 text-sci-cyan' : 'bg-white/10 text-sci-text')
                       : 'text-sci-dim hover:text-sci-text'}
                   `}
                 >

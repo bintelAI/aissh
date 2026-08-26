@@ -95,12 +95,12 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(({
       lineHeight: 1.2,
       scrollback: 10000,
       theme: {
-        background: '#0d1117',
+        background: '#11161d',
         foreground: '#c9d1d9',
         cursor: '#00f3ff',
         selectionBackground: 'rgba(0, 243, 255, 0.3)',
         selectionInactiveBackground: 'rgba(0, 243, 255, 0.1)',
-        black: '#0d1117',
+        black: '#11161d',
         red: '#ff2a00',
         green: '#0aff00',
         yellow: '#ffcc00',
@@ -422,7 +422,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(({
       {/* Xterm Container */}
       <div 
         ref={terminalContainerRef}
-        className="flex-1 bg-[#0d1117] p-2 overflow-hidden relative" 
+        className="flex-1 bg-sci-obsidian p-2 overflow-hidden relative" 
         onClick={() => {
           if (xtermRef.current) {
             xtermRef.current.focus();

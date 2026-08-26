@@ -1,1 +1,0 @@
-{"main":{"identifier":"main","description":"main capability","local":true,"windows":["main"],"permissions":["core:default",{"identifier":"shell:allow-spawn","allow":[{"name":"back-rust","sidecar":true}]}]}}

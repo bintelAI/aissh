@@ -4,6 +4,7 @@ import { CyberPanel } from '../common/CyberPanel';
 import { CyberSelect } from '../common/CyberSelect';
 import { useSSHStore } from '../store/useSSHStore';
 import { AIServiceFactory } from '../services/aiServiceFactory';
+import { isRiskyCommand } from '../services/geminiService';
 import { SingleExecutionStrategy, BatchExecutionStrategy, BatchCompareStrategy, CommandExecutor } from '../services/commandStrategy';
 import { CommandTemplateModal } from './CommandTemplateModal';
 import { BatchResultCompare } from './BatchResultCompare';
@@ -27,6 +28,7 @@ export const CommandInput: React.FC<CommandInputProps> = ({ onInsertCommand }) =
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isComparing, setIsComparing] = useState(false);
   const [showCompareResults, setShowCompareResults] = useState(false);
+  const [riskConfirm, setRiskConfirm] = useState<{ command: string; mode: 'single' | 'batch' | 'compare' } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const executor = useRef(new CommandExecutor(new SingleExecutionStrategy()));
@@ -147,15 +149,14 @@ export const CommandInput: React.FC<CommandInputProps> = ({ onInsertCommand }) =
     }
   };
 
-  const handleExecuteCommand = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!globalCommand.trim()) return;
+  const performExecute = async (cmd: string, mode: 'single' | 'batch' | 'compare') => {
+    if (!cmd.trim()) return;
 
-    if (operationMode === 'compare') {
+    if (mode === 'compare') {
       setIsComparing(true);
       clearBatchResults();
       executor.current.setStrategy(new BatchCompareStrategy());
-      await executor.current.execute(globalCommand, { 
+      await executor.current.execute(cmd, { 
         activeSessionId, 
         openSessions,
         onBatchResults: (results) => {
@@ -167,21 +168,34 @@ export const CommandInput: React.FC<CommandInputProps> = ({ onInsertCommand }) =
           setShowCompareResults(true);
         }
       });
-    } else if (operationMode === 'batch') {
+    } else if (mode === 'batch') {
       executor.current.setStrategy(new BatchExecutionStrategy());
-      await executor.current.execute(globalCommand, { activeSessionId, openSessions });
+      await executor.current.execute(cmd, { activeSessionId, openSessions });
     } else {
       executor.current.setStrategy(new SingleExecutionStrategy());
-      await executor.current.execute(globalCommand, { activeSessionId, openSessions });
+      await executor.current.execute(cmd, { activeSessionId, openSessions });
     }
 
-    addCommandToHistory(globalCommand);
-    if (operationMode !== 'compare') {
+    addCommandToHistory(cmd);
+    if (mode !== 'compare') {
       setGlobalCommand('');
     }
     setPrediction(null);
     setHistoryIndex(-1);
     setSuggestions([]);
+  };
+
+  const handleExecuteCommand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!globalCommand.trim()) return;
+
+    // 命令风险拦截：高危命令强制二次确认（静态规则，无需 AI 网络往返；AI 风险评估按钮保留为可选深度分析）
+    if (isRiskyCommand(globalCommand)) {
+      setRiskConfirm({ command: globalCommand, mode: operationMode });
+      return;
+    }
+
+    await performExecute(globalCommand, operationMode);
   };
 
   const terminalSessions = openSessions.filter(id => !id.endsWith('#files'));
@@ -370,6 +384,45 @@ export const CommandInput: React.FC<CommandInputProps> = ({ onInsertCommand }) =
           results={batchResults}
           onClose={() => setShowCompareResults(false)}
         />
+      )}
+
+      {riskConfirm && (
+        <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setRiskConfirm(null)}>
+          <div className="bg-sci-obsidian border border-sci-red/50 shadow-[0_0_30px_rgba(255,42,0,0.3)] max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 p-4 border-b border-sci-red/30 bg-sci-red/10">
+              <div className="p-2 bg-sci-red/20"><AlertTriangle size={20} className="text-sci-red"/></div>
+              <div>
+                <div className="text-sci-red font-sci font-bold uppercase tracking-widest text-xs">高危命令确认</div>
+                <div className="text-sci-text/70 text-[11px]">该命令可能造成不可逆影响，请二次确认后执行</div>
+              </div>
+            </div>
+            <div className="p-4">
+              <div className="bg-black/40 border border-white/10 p-3 font-mono text-xs text-sci-cyan break-all max-h-32 overflow-y-auto custom-scrollbar">
+                {riskConfirm.command}
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setRiskConfirm(null)}
+                  className="flex-1 px-4 py-2 text-xs font-bold uppercase tracking-widest border border-white/20 text-sci-dim hover:bg-white/5 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const { command, mode } = riskConfirm;
+                    setRiskConfirm(null);
+                    await performExecute(command, mode);
+                  }}
+                  className="flex-1 px-4 py-2 text-xs font-bold uppercase tracking-widest bg-sci-red/20 border border-sci-red/50 text-sci-red hover:bg-sci-red hover:text-black transition-colors"
+                >
+                  确认执行
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

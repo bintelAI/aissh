@@ -14,8 +14,10 @@ import { PromptConfigModal } from './PromptConfigModal';
 import { usePromptStore } from '../store/usePromptStore';
 import { useAIStore } from '../store/useAIStore';
 import { useSSHStore } from '../store/useSSHStore';
+import { useShallow } from 'zustand/react/shallow';
 import { chatWithAIStream, runAutonomousTask } from '../services/geminiService';
 import { saveApiKey } from '../services/aiClient';
+import { extractTaskSummary } from '../services/aiSummaryParser';
 import {
   clearAiMessages,
   createAiMessage,
@@ -60,26 +62,41 @@ export interface AIChatPanelRef {
 export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs, activeServerId, onInsertCommand, onSwitchServer, onAICommand, onOpenMultiIPCenter }, ref) => {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
 
-  const { agentConfig, setAgentConfig } = useAIStore();
-  const {
-    servers,
-    setServers,
-    folders,
-    setFolders,
-    commandTemplates,
-    setCommandTemplates,
-    commandHistory,
-    setCommandHistory,
-  } = useSSHStore();
-  const { 
-    promptTree, 
-    setPromptTree,
-    selectedPromptIds, 
-    setSelectedPromptIds,
-    togglePromptSelection,
-    selectPrompt,
-    deselectPrompt
-  } = usePromptStore();
+  const { agentConfig } = useAIStore(useShallow((s) => ({ agentConfig: s.agentConfig })));
+  const { setAgentConfig } = useAIStore(useShallow((s) => ({ setAgentConfig: s.setAgentConfig })));
+  const { servers, folders, commandTemplates, commandHistory } = useSSHStore(
+    useShallow((s) => ({
+      servers: s.servers,
+      folders: s.folders,
+      commandTemplates: s.commandTemplates,
+      commandHistory: s.commandHistory,
+    })),
+  );
+  const { setServers, setFolders, setCommandTemplates, setCommandHistory } =
+    useSSHStore(
+      useShallow((s) => ({
+        setServers: s.setServers,
+        setFolders: s.setFolders,
+        setCommandTemplates: s.setCommandTemplates,
+        setCommandHistory: s.setCommandHistory,
+      })),
+    );
+  const { promptTree, selectedPromptIds } = usePromptStore(
+    useShallow((s) => ({
+      promptTree: s.promptTree,
+      selectedPromptIds: s.selectedPromptIds,
+    })),
+  );
+  const { setPromptTree, setSelectedPromptIds, togglePromptSelection, selectPrompt, deselectPrompt } =
+    usePromptStore(
+      useShallow((s) => ({
+        setPromptTree: s.setPromptTree,
+        setSelectedPromptIds: s.setSelectedPromptIds,
+        togglePromptSelection: s.togglePromptSelection,
+        selectPrompt: s.selectPrompt,
+        deselectPrompt: s.deselectPrompt,
+      })),
+    );
 
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -92,7 +109,16 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
   const [selectedIPs, setSelectedIPs] = useState<SelectedIP[]>([]);
   const [executionMode, setExecutionMode] = useState<ExecutionMode>('parallel');
   
-  const { createOperation, startOperation, operations, hydrateOperations } = useMultiIPStore();
+  const { operations } = useMultiIPStore(
+    useShallow((s) => ({ operations: s.operations })),
+  );
+  const { createOperation, startOperation, hydrateOperations } = useMultiIPStore(
+    useShallow((s) => ({
+      createOperation: s.createOperation,
+      startOperation: s.startOperation,
+      hydrateOperations: s.hydrateOperations,
+    })),
+  );
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -418,8 +444,9 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
     let workflowMessages = sessions.find(s => s.id === targetSessionId)?.messages || [];
     const stepHandler = async (step: any) => {
       const lastMsg = workflowMessages[workflowMessages.length - 1];
+      const summary = step.isDone ? extractTaskSummary(step.summary || '') : undefined;
       const content = step.isDone
-        ? `### 🏁 任务完成\n${step.summary || ''}`
+        ? `### 🏁 任务完成\n${summary || ''}`
         : `**💡 思考**: ${step.thought}\n\n${step.command ? `**🚀 执行命令**: \`${step.command}\`` : ''}`;
 
       if (step.isDone && lastMsg?.isDone) {
@@ -430,14 +457,14 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
             ...message,
             ...updatedMessage,
             isDone: true,
-            summary: step.summary,
+            summary,
           } : message),
         } : s));
         workflowMessages = workflowMessages.map(message => message.id === lastMsg.id ? {
           ...message,
           ...updatedMessage,
           isDone: true,
-          summary: step.summary,
+          summary,
         } : message);
         return;
       }
@@ -453,7 +480,7 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
         commandToExecute: step.command,
         confirmationStatus: step.requiresConfirmation ? 'pending' as const : undefined,
         isDone: step.isDone,
-        summary: step.summary,
+        summary,
       };
       workflowMessages = [...workflowMessages, renderedStep];
       setSessions(prev => prev.map(s => s.id === targetSessionId ? {
@@ -574,6 +601,22 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
     URL.revokeObjectURL(url);
   };
 
+  // 单条消息下载为 Markdown 文档
+  const handleDownloadMessageMarkdown = (msg: ChatMessage) => {
+    const role = msg.role === 'user' ? 'User' : 'Assistant';
+    const time = msg.timestamp.toLocaleString();
+    const content = `### ${role} (${time})\n\n${msg.content}\n`;
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `message-${msg.id}-${msg.timestamp.toISOString().slice(0,10)}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleSend = async () => {
     if ((!input.trim() && selectedIPs.length === 0) || isLoading) return;
     
@@ -636,8 +679,8 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
           const isInfo = /info|notice/i.test(line);
           
           let colorClass = 'text-sci-text/80';
-          if (isError) colorClass = 'text-red-400 bg-red-400/10 px-1 rounded';
-          else if (isWarn) colorClass = 'text-orange-300 bg-orange-300/10 px-1 rounded';
+          if (isError) colorClass = 'text-sci-red bg-sci-red/10 px-1 rounded';
+          else if (isWarn) colorClass = 'text-sci-violet bg-sci-violet/10 px-1 rounded';
           else if (isInfo) colorClass = 'text-sci-cyan/80 bg-sci-cyan/5 px-1 rounded';
 
           return (
@@ -669,8 +712,8 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
               <div className="absolute inset-0 bg-sci-cyan/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
               <div className="text-[10px] text-white/40 uppercase tracking-widest mb-1 font-sci relative z-10">{key}</div>
               <div className={`text-xl font-black font-sci relative z-10 ${
-                key.toLowerCase().includes('error') ? 'text-red-400' : 
-                key.toLowerCase().includes('warn') ? 'text-orange-300' : 'text-sci-cyan'
+                key.toLowerCase().includes('error') ? 'text-sci-red' : 
+                key.toLowerCase().includes('warn') ? 'text-sci-violet' : 'text-sci-cyan'
               }`}>
                 {value}
               </div>
@@ -990,8 +1033,16 @@ export const AIChatPanel = forwardRef<AIChatPanelRef, AIChatPanelProps>(({ logs,
                     </div>
                   )}
 
-                  <div className={`mt-2 text-[9px] font-mono opacity-30 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-                    {msg.timestamp.toLocaleTimeString()}
+                  <div className={`mt-2 flex items-center justify-between gap-2 text-[9px] font-mono opacity-30 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                    <span>{msg.timestamp.toLocaleTimeString()}</span>
+                    <button
+                      onClick={() => handleDownloadMessageMarkdown(msg)}
+                      className="flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity hover:text-sci-cyan hover:opacity-100"
+                      title="下载此消息为 Markdown"
+                    >
+                      <FileDown size={12} />
+                      <span className="uppercase tracking-widest">MD</span>
+                    </button>
                   </div>
                 </div>
               </motion.div>

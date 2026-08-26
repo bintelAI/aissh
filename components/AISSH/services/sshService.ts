@@ -32,18 +32,11 @@ class SSHConnection {
   private constructor() {
     const isElectron =
       typeof window !== "undefined" && window.electron?.isElectron;
-    const isTauri =
-      typeof window !== "undefined" &&
-      (window.location.protocol === "tauri:" ||
-        (window as { __TAURI__?: unknown }).__TAURI__ != null ||
-        (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !=
-          null);
-    const socketUrl =
-      isElectron || isTauri
-        ? "http://localhost:3001"
-        : import.meta.env.PROD
-          ? "/"
-          : "http://localhost:3001";
+    const socketUrl = isElectron
+      ? "http://localhost:3001"
+      : import.meta.env.PROD
+        ? "/"
+        : "http://localhost:3001";
 
     this.socket = io(socketUrl, { autoConnect: false });
     this.bindSocketEvents();

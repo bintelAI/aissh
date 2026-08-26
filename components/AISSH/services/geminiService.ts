@@ -15,7 +15,7 @@ const getSelectedPrompt = (): string => {
   }
 };
 
-const isRiskyCommand = (cmd: string): boolean => {
+export const isRiskyCommand = (cmd: string): boolean => {
   const riskyKeywords = [
     'rm ', 'kill ', 'reboot', 'shutdown', 'mkfs', 'dd ', 
     'mv ', 'chmod', 'chown', 'systemctl stop', 'systemctl disable',

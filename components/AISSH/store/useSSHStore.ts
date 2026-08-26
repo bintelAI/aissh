@@ -115,27 +115,6 @@ interface SSHState {
   ) => void;
 }
 
-const initialServers: Server[] = [
-  {
-    id: "1",
-    name: "Web Server 01",
-    ip: "192.168.0.1",
-    username: "root",
-    port: 22,
-    status: "disconnected",
-    parentId: null,
-  },
-  {
-    id: "2",
-    name: "MySQL Master",
-    ip: "10.0.0.5",
-    username: "admin",
-    port: 22,
-    status: "disconnected",
-    parentId: null,
-  },
-];
-
 const initialTemplates: CommandTemplate[] = [
   {
     id: "t1",
@@ -158,7 +137,7 @@ const initialTemplates: CommandTemplate[] = [
 ];
 
 export const useSSHStore = create<SSHState>((set) => ({
-  servers: initialServers,
+  servers: [],
   folders: [],
   activeSessionId: null,
   openSessions: [],

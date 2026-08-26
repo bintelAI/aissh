@@ -9,17 +9,21 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { SshService, SshConnectionConfig } from './ssh.service';
+import { DatabaseService } from '../database/database.service';
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: ['http://localhost:3000', 'http://127.0.0.1:3000', 'null'],
   },
 })
 export class SshGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  constructor(private readonly sshService: SshService) {}
+  constructor(
+    private readonly sshService: SshService,
+    private readonly databaseService: DatabaseService,
+  ) {}
 
   handleConnection(client: Socket) {
     console.log(`Client connected: ${client.id}`);
@@ -34,11 +38,32 @@ export class SshGateway implements OnGatewayConnection, OnGatewayDisconnect {
   handleConnect(
     @ConnectedSocket() client: Socket,
     @MessageBody() config: SshConnectionConfig,
-  ) {
-    console.log(
-      `Client ${client.id} requesting connection to ${config.ip} (Server: ${config.serverId})`,
+  ): void {
+    const savedTarget = this.databaseService.findServer(
+      config.serverId.split('#')[0],
     );
-    this.sshService.createConnection(client.id, config, this.server);
+    if (!savedTarget || !savedTarget.password) {
+      this.server.to(client.id).emit('ssh-error', {
+        serverId: config.serverId,
+        errorType: 'missing_credential',
+        message: '服务器凭据未在后端配置，请先保存密码',
+        retryable: false,
+        final: true,
+      });
+      return;
+    }
+    const resolvedConfig: SshConnectionConfig = {
+      ...config,
+      serverId: config.connectionId ?? config.serverId,
+      ip: savedTarget.host,
+      port: savedTarget.port,
+      username: savedTarget.username,
+      password: savedTarget.password,
+    };
+    console.log(
+      `Client ${client.id} requesting connection to ${resolvedConfig.ip} (Server: ${resolvedConfig.serverId})`,
+    );
+    this.sshService.createConnection(client.id, resolvedConfig, this.server);
   }
 
   @SubscribeMessage('ssh-command')

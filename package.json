@@ -11,8 +11,6 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "tauri:dev": "node scripts/prepare-tauri-sidecar.mjs debug && tauri dev",
-    "tauri:build": "node scripts/prepare-tauri-sidecar.mjs release && tauri build || (echo \"DMG 打包脚本失败，但 .app 与临时 dmg 已生成，见 src-tauri/target/release/bundle/macos\" && exit 0)",
     "build:back": "cd back && pnpm run build && npx ncc build src/main.ts -o dist/bundle -m --no-cache --minify && node -e \"const fs=require('fs');const s='dist/bundle/index.js';const d='dist/bundle/index.cjs';if(fs.existsSync(s)){if(fs.existsSync(d))fs.unlinkSync(d);fs.renameSync(s,d)}\"",
     "electron:dev": "npm run build:back && concurrently \"vite --config vite.config.electron.ts\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build": "npm run build:back && vite build --config vite.config.electron.ts && electron-builder",
@@ -26,8 +24,6 @@
   },
   "devDependencies": {
         "agentation": "^3.0.2",
-    "@tauri-apps/api": "^2.0.0",
-    "@tauri-apps/cli": "^2.0.0",
     "@types/node": "^22.14.0",
     "@vercel/ncc": "^0.38.4",
     "@vitejs/plugin-react": "^5.0.0",
@@ -38,14 +34,11 @@
     "electron": "^39.2.7",
     "electron-builder": "^26.0.12",
     "electron-is-dev": "^3.0.1",
-    "i18next": "^25.7.3",
-    "i18next-browser-languagedetector": "^8.2.0",
     "lucide-react": "0.344.0",
     "monaco-editor": "^0.55.1",
     "postcss": "^8.5.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "react-i18next": "^16.5.1",
     "react-markdown": "9.0.1",
     "react-syntax-highlighter": "^16.1.0",
     "reflect-metadata": "^0.2.2",
@@ -67,7 +60,7 @@
     "zustand": "^5.0.9"
   },
   "build": {
-    "appId": "com.gemini.ssh.assistant",
+    "appId": "com.bintelai.ssh.assistant",
     "productName": "方块SSH助手",
     "directories": {
       "output": "release"

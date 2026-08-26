@@ -11,7 +11,7 @@ export const AIEmptyState: React.FC<{ onAction?: (text: string) => void }> = ({ 
 
   return (
     <div className="flex h-full flex-col items-center justify-center overflow-hidden p-6">
-      <div className="mb-7 flex h-12 w-12 items-center justify-center rounded-lg border border-sky-400/25 bg-sky-400/10 text-sci-cyan">
+      <div className="mb-7 flex h-12 w-12 items-center justify-center rounded-lg border border-sci-cyan/25 bg-sci-cyan/10 text-sci-cyan">
         <BrainCircuit size={24} />
       </div>
       <div className="mb-7 text-center">
@@ -23,9 +23,9 @@ export const AIEmptyState: React.FC<{ onAction?: (text: string) => void }> = ({ 
           <button
             key={item.text}
             onClick={() => onAction?.(item.text)}
-            className="group flex items-center gap-3 rounded-md border border-slate-700/70 bg-sci-panel/70 p-3 text-left transition-colors duration-150 hover:border-sky-400/40 hover:bg-sky-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+            className="group flex items-center gap-3 rounded-md border border-white/10 bg-sci-panel/70 p-3 text-left transition-colors duration-150 hover:border-sci-cyan/40 hover:bg-sci-cyan/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sci-cyan/70"
           >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-sky-400/10 text-sci-cyan group-hover:bg-sky-400/15">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-sci-cyan/10 text-sci-cyan group-hover:bg-sci-cyan/15">
               {item.icon}
             </span>
             <span className="min-w-0 flex-1">

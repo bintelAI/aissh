@@ -30,8 +30,6 @@
   "exclude": [
     "backupDel",
     "back",
-    "back-rust",
-    "src-tauri",
     "dist"
   ]
 }

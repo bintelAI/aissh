@@ -31,7 +31,7 @@ export const CyberPanel: React.FC<CyberPanelProps> = ({
     // @ts-ignore - Dynamic component type issue with framer-motion
     <Component
       className={`
-        relative ${bgMap[variant]} rounded-md border border-slate-700/60 shadow-[0_8px_24px_rgba(0,0,0,0.18)]
+        relative ${bgMap[variant]} rounded-md border border-white/10 shadow-[0_8px_24px_rgba(0,0,0,0.18)]
         ${glow ? 'border-sci-cyan/40 shadow-neon-cyan' : ''}
         ${className}
       `}

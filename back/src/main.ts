@@ -17,12 +17,17 @@ async function bootstrap(): Promise<void> {
   const nestTime = Date.now() - nestStartTime;
   console.log(`[Backend] NestJS application created in ${nestTime}ms`);
   
-  app.enableCors();
+  app.enableCors({
+    origin: (origin, callback) => {
+      const localOrigins = new Set(['http://localhost:3000', 'http://127.0.0.1:3000']);
+      callback(null, !origin || localOrigins.has(origin));
+    },
+  });
 
   const port = process.env.PORT ?? 3001;
   const listenStartTime = Date.now();
   
-  await app.listen(port);
+  await app.listen(port, '127.0.0.1');
   
   const listenTime = Date.now() - listenStartTime;
   console.log(`[Backend] Server listening in ${listenTime}ms`);

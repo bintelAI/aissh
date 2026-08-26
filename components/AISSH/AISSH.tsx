@@ -13,6 +13,7 @@ import { useFileStore } from "./store/useFileStore";
 import { useMultiIPStore } from "./store/useMultiIPStore";
 import { usePromptStore } from "./store/usePromptStore";
 import { useAIStore } from "./store/useAIStore";
+import { useShallow } from "zustand/react/shallow";
 import {
   beginConfigurationHydration,
   finishConfigurationHydration,
@@ -47,6 +48,21 @@ const AISSH: React.FC = () => {
     logs,
     failureCounts,
     connectionDetails,
+    isAIPanelOpen,
+  } = useSSHStore(
+    useShallow((s) => ({
+      servers: s.servers,
+      folders: s.folders,
+      activeSessionId: s.activeSessionId,
+      openSessions: s.openSessions,
+      logs: s.logs,
+      failureCounts: s.failureCounts,
+      connectionDetails: s.connectionDetails,
+      isAIPanelOpen: s.isAIPanelOpen,
+    })),
+  );
+
+  const {
     setActiveSessionId,
     setOpenSessions,
     addLog,
@@ -59,9 +75,24 @@ const AISSH: React.FC = () => {
     deleteFolder,
     resetFailureCount,
     incrementFailureCount,
-    isAIPanelOpen,
     setIsAIPanelOpen,
-  } = useSSHStore();
+  } = useSSHStore(
+    useShallow((s) => ({
+      setActiveSessionId: s.setActiveSessionId,
+      setOpenSessions: s.setOpenSessions,
+      addLog: s.addLog,
+      updateConnectionState: s.updateConnectionState,
+      addServer: s.addServer,
+      updateServer: s.updateServer,
+      deleteServer: s.deleteServer,
+      addFolder: s.addFolder,
+      updateFolder: s.updateFolder,
+      deleteFolder: s.deleteFolder,
+      resetFailureCount: s.resetFailureCount,
+      incrementFailureCount: s.incrementFailureCount,
+      setIsAIPanelOpen: s.setIsAIPanelOpen,
+    })),
+  );
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [isMobileServerPanelOpen, setIsMobileServerPanelOpen] = useState(false);
@@ -77,15 +108,23 @@ const AISSH: React.FC = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, [isAIPanelOpen, setIsAIPanelOpen]);
 
-  const {
-    fileSessions,
-    activeFileSessionId,
-    openFile,
-    closeFile,
-    updateFileContent,
-    saveFile,
-    backupFile,
-  } = useFileStore();
+  const { fileSessions, activeFileSessionId } = useFileStore(
+    useShallow((s) => ({
+      fileSessions: s.fileSessions,
+      activeFileSessionId: s.activeFileSessionId,
+    })),
+  );
+
+  const { openFile, closeFile, updateFileContent, saveFile, backupFile } =
+    useFileStore(
+      useShallow((s) => ({
+        openFile: s.openFile,
+        closeFile: s.closeFile,
+        updateFileContent: s.updateFileContent,
+        saveFile: s.saveFile,
+        backupFile: s.backupFile,
+      })),
+    );
 
   const [isAddModalOpen, setIsAddModalOpen] = useState<{
     parentId: string | null;
@@ -101,7 +140,12 @@ const AISSH: React.FC = () => {
 
   // 多 IP 操作中心状态
   const [isMultiIPCenterOpen, setIsMultiIPCenterOpen] = useState(false);
-  const { operations, activeOperationId } = useMultiIPStore();
+  const { operations, activeOperationId } = useMultiIPStore(
+    useShallow((s) => ({
+      operations: s.operations,
+      activeOperationId: s.activeOperationId,
+    })),
+  );
   const activeOperation = operations.find((op) => op.id === activeOperationId);
   const hasRunningOperation = operations.some((op) => op.status === "running");
 
@@ -431,7 +475,7 @@ const AISSH: React.FC = () => {
   return (
     <div className="flex h-screen bg-sci-base text-sci-text font-sci overflow-hidden relative">
       {persistenceError && (
-        <div className="absolute top-3 left-1/2 z-[70] -translate-x-1/2 border border-red-500/60 bg-black/90 px-3 py-2 text-xs text-red-200">
+        <div className="absolute top-3 left-1/2 z-[70] -translate-x-1/2 border border-sci-red/60 bg-sci-obsidian px-3 py-2 text-xs text-sci-red">
           {persistenceError}
           <button
             className="ml-3 text-sci-cyan"
@@ -558,7 +602,7 @@ const AISSH: React.FC = () => {
             {isMobile && (
               <button
                 onClick={() => setIsMobileServerPanelOpen(true)}
-                className="mt-1 flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 text-sci-dim transition-colors hover:border-sky-400/40 hover:bg-sky-400/10 hover:text-sci-cyan"
+                className="mt-1 flex h-7 w-7 items-center justify-center rounded-md border border-white/10 text-sci-dim transition-colors hover:border-sci-cyan/40 hover:bg-sci-cyan/10 hover:text-sci-cyan"
                 title="显示节点列表"
               >
                 <PanelLeft size={15} />
@@ -637,7 +681,7 @@ const AISSH: React.FC = () => {
             {/* File Browser Sidebar */}
             <div
               style={{ width: fileBrowserWidth }}
-              className="flex-shrink-0 flex overflow-hidden border-r border-white/5 bg-[#0d1117]"
+              className="flex-shrink-0 flex overflow-hidden border-r border-white/5 bg-sci-obsidian"
             >
               <FileBrowser
                 serverId={activeSessionId || ""}

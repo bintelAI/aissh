@@ -48,14 +48,15 @@ export const SessionTabs: React.FC = () => {
       container.addEventListener("wheel", handleWheel, { passive: false });
     }
 
+    const handleScroll = () => setMenu(null);
     window.addEventListener("mousedown", handleMouseDown, true);
-    window.addEventListener("scroll", () => setMenu(null), true);
+    window.addEventListener("scroll", handleScroll, true);
     return () => {
       if (container) {
         container.removeEventListener("wheel", handleWheel);
       }
       window.removeEventListener("mousedown", handleMouseDown, true);
-      window.removeEventListener("scroll", () => setMenu(null), true);
+      window.removeEventListener("scroll", handleScroll, true);
     };
   }, [menu]);
 

@@ -272,7 +272,7 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
             >
               <div
                 className={`flex items-center gap-2 rounded-md border border-transparent p-1.5 cursor-pointer group transition-colors
-                  ${dragOverId === folder.id ? "bg-sci-cyan/10 border-sci-cyan/30" : "hover:bg-slate-800/70"}`}
+                  ${dragOverId === folder.id ? "bg-sci-cyan/10 border-sci-cyan/30" : "hover:bg-white/5"}`}
                 onClick={(e) => toggleFolder(e, folder.id)}
                 onContextMenu={(e) => handleContextMenu(e, "folder", folder)}
               >
@@ -350,7 +350,7 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
                 ${
                   activeServerId === server.id
                     ? "bg-sci-cyan/10 border-sci-cyan/40 text-sci-cyan"
-                    : "border-transparent hover:bg-slate-800/70 text-sci-text/60 hover:text-sci-text"
+                    : "border-transparent hover:bg-white/5 text-sci-text/60 hover:text-sci-text"
                 }
               `}
             >
@@ -402,15 +402,15 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-sci-panel border-r border-slate-700/60 relative overflow-hidden">
+    <div className="flex flex-col h-full bg-sci-panel border-r border-white/10 relative overflow-hidden">
       {/* Header */}
       <div
-        className="p-4 border-b border-slate-700/60 flex items-center justify-between bg-sci-panel relative z-10"
+        className="p-4 border-b border-white/10 flex items-center justify-between bg-sci-panel relative z-10"
         style={{ WebkitAppRegion: "drag" } as any}
       >
         <div className="flex items-center gap-3">
           <div className="relative group cursor-pointer">
-            <div className="relative p-1.5 bg-sci-obsidian border border-sky-400/25 text-sci-cyan rounded-md">
+            <div className="relative p-1.5 bg-sci-obsidian border border-sci-cyan/25 text-sci-cyan rounded-md">
               <LayoutGrid size={16} />
             </div>
           </div>
@@ -426,7 +426,7 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
               </h2>
             </a>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="flex h-1.5 w-1.5 rounded-full bg-sci-green animate-pulse shadow-[0_0_5px_#22c55e]"></span>
+              <span className="flex h-1.5 w-1.5 rounded-full bg-sci-green animate-pulse shadow-[0_0_5px_#0aff00]"></span>
               <span className="text-[9px] text-sci-dim font-medium hidden sm:block">
                 节点管理
               </span>
@@ -485,23 +485,23 @@ export const ServerTree: React.FC<ServerTreeProps> = ({
               <ServerIcon size={32} />
             </div>
             <p className="text-xs text-sci-cyan/40 font-sci uppercase tracking-widest mb-1">
-              未检测到活动节点
+              暂无已配置节点
             </p>
             <p className="text-[10px] text-white/20 font-mono mb-6">
-              NO ACTIVE NODES DETECTED
+              请添加节点开始使用
             </p>
             <button
               onClick={() => onAddServer(null)}
               className="px-5 py-2 bg-sci-cyan/10 border border-sci-cyan/30 text-sci-cyan text-[10px] font-sci uppercase tracking-[0.2em] hover:bg-sci-cyan hover:text-black transition-all clip-corner shadow-[0_0_15px_rgba(0,243,255,0.1)] hover:shadow-[0_0_20px_rgba(0,243,255,0.4)]"
             >
-              初始化连接
+              添加节点
             </button>
           </motion.div>
         )}
       </div>
 
       {/* 底部装饰性状态栏 */}
-      <div className="p-2.5 border-t border-slate-700/60 bg-sci-obsidian flex items-center justify-between relative z-10">
+      <div className="p-2.5 border-t border-white/10 bg-sci-obsidian flex items-center justify-between relative z-10">
         <div className="flex items-center gap-2">
           <Activity size={12} className="text-sci-cyan/40" />
           <div className="flex flex-col">

@@ -215,10 +215,10 @@ export const MultiIPOperationCenter: React.FC<MultiIPOperationCenterProps> = ({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'running': return <Activity size={16} className="text-sci-cyan animate-pulse" />;
-      case 'completed': return <CheckCircle size={16} className="text-green-500" />;
-      case 'error': return <XCircle size={16} className="text-red-500" />;
-      case 'paused': return <Pause size={16} className="text-yellow-500" />;
-      case 'waiting_decision': return <AlertCircle size={16} className="text-orange-500 animate-bounce" />;
+      case 'completed': return <CheckCircle size={16} className="text-sci-green" />;
+      case 'error': return <XCircle size={16} className="text-sci-red" />;
+      case 'paused': return <Pause size={16} className="text-sci-violet" />;
+      case 'waiting_decision': return <AlertCircle size={16} className="text-sci-violet animate-bounce" />;
       default: return <Clock size={16} className="text-sci-dim" />;
     }
   };
@@ -226,8 +226,8 @@ export const MultiIPOperationCenter: React.FC<MultiIPOperationCenterProps> = ({
   const getServerStatusIcon = (status: ServerExecutionResult['status']) => {
     switch (status) {
       case 'running': return <div className="w-2 h-2 rounded-full bg-sci-cyan animate-pulse" />;
-      case 'success': return <CheckCircle size={14} className="text-green-500" />;
-      case 'error': return <XCircle size={14} className="text-red-500" />;
+      case 'success': return <CheckCircle size={14} className="text-sci-green" />;
+      case 'error': return <XCircle size={14} className="text-sci-red" />;
       case 'skipped': return <div className="w-2 h-2 rounded-full bg-sci-dim" />;
       default: return <div className="w-2 h-2 rounded-full bg-sci-dim/50" />;
     }
@@ -296,8 +296,8 @@ export const MultiIPOperationCenter: React.FC<MultiIPOperationCenterProps> = ({
                       setSelectedOperationId(null);
                     }
                   }}
-                  className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1
-                             px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
+                  className="text-[10px] text-sci-red hover:text-sci-red flex items-center gap-1
+                             px-2 py-1 rounded hover:bg-sci-red/10 transition-colors"
                   title="清除所有本地缓存"
                 >
                   <Trash2 size={10} />
@@ -378,8 +378,8 @@ export const MultiIPOperationCenter: React.FC<MultiIPOperationCenterProps> = ({
                       {selectedOperation.status === 'running' ? (
                         <button
                           onClick={() => pauseOperation(selectedOperation.id)}
-                          className="px-3 py-1.5 rounded bg-yellow-500/20 border border-yellow-500/50
-                                     text-yellow-400 text-xs font-medium hover:bg-yellow-500/30 transition-colors
+                          className="px-3 py-1.5 rounded bg-sci-violet/20 border border-sci-violet/50
+                                     text-sci-violet text-xs font-medium hover:bg-sci-violet/30 transition-colors
                                      flex items-center gap-1"
                         >
                           <Pause size={12} />
@@ -388,8 +388,8 @@ export const MultiIPOperationCenter: React.FC<MultiIPOperationCenterProps> = ({
                       ) : selectedOperation.status === 'paused' ? (
                         <button
                           onClick={() => startOperation(selectedOperation.id)}
-                          className="px-3 py-1.5 rounded bg-green-500/20 border border-green-500/50
-                                     text-green-400 text-xs font-medium hover:bg-green-500/30 transition-colors
+                          className="px-3 py-1.5 rounded bg-sci-green/20 border border-sci-green/50
+                                     text-sci-green text-xs font-medium hover:bg-sci-green/30 transition-colors
                                      flex items-center gap-1"
                         >
                           <Play size={12} />
@@ -400,8 +400,8 @@ export const MultiIPOperationCenter: React.FC<MultiIPOperationCenterProps> = ({
                       {selectedOperation.status === 'running' && (
                         <button
                           onClick={() => cancelOperation(selectedOperation.id)}
-                          className="px-3 py-1.5 rounded bg-red-500/20 border border-red-500/50
-                                     text-red-400 text-xs font-medium hover:bg-red-500/30 transition-colors
+                          className="px-3 py-1.5 rounded bg-sci-red/20 border border-sci-red/50
+                                     text-sci-red text-xs font-medium hover:bg-sci-red/30 transition-colors
                                      flex items-center gap-1"
                         >
                           <Square size={12} />
@@ -435,13 +435,13 @@ export const MultiIPOperationCenter: React.FC<MultiIPOperationCenterProps> = ({
                     </div>
                     <div className="p-3 rounded bg-black/30 border border-white/5">
                       <div className="text-[10px] text-sci-dim uppercase mb-1">已完成</div>
-                      <div className="text-lg font-sci font-bold text-green-400">
+                      <div className="text-lg font-sci font-bold text-sci-green">
                         {selectedOperation.stats.completedServers}
                       </div>
                     </div>
                     <div className="p-3 rounded bg-black/30 border border-white/5">
                       <div className="text-[10px] text-sci-dim uppercase mb-1">失败</div>
-                      <div className="text-lg font-sci font-bold text-red-400">
+                      <div className="text-lg font-sci font-bold text-sci-red">
                         {selectedOperation.stats.failedServers}
                       </div>
                     </div>
@@ -458,24 +458,24 @@ export const MultiIPOperationCenter: React.FC<MultiIPOperationCenterProps> = ({
                 {(selectedOperation.status === 'completed' ||
                   selectedOperation.status === 'error' ||
                   selectedOperation.status === 'cancelled') && (
-                  <div className="px-6 py-4 border-b border-sci-cyan/20 bg-gradient-to-r from-green-500/5 to-sci-cyan/5">
+                  <div className="px-6 py-4 border-b border-sci-cyan/20 bg-gradient-to-r from-sci-green/5 to-sci-cyan/5">
                     {/* 标题栏：状态 + 导出按钮 */}
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         {selectedOperation.status === 'completed' ? (
                           <>
-                            <CheckCircle size={20} className="text-green-500" />
-                            <span className="text-lg font-sci font-bold text-green-400">任务已完成</span>
+                            <CheckCircle size={20} className="text-sci-green" />
+                            <span className="text-lg font-sci font-bold text-sci-green">任务已完成</span>
                           </>
                         ) : selectedOperation.status === 'error' ? (
                           <>
-                            <XCircle size={20} className="text-red-500" />
-                            <span className="text-lg font-sci font-bold text-red-400">任务执行出错</span>
+                            <XCircle size={20} className="text-sci-red" />
+                            <span className="text-lg font-sci font-bold text-sci-red">任务执行出错</span>
                           </>
                         ) : (
                           <>
-                            <Square size={20} className="text-yellow-500" />
-                            <span className="text-lg font-sci font-bold text-yellow-400">任务已取消</span>
+                            <Square size={20} className="text-sci-violet" />
+                            <span className="text-lg font-sci font-bold text-sci-violet">任务已取消</span>
                           </>
                         )}
                       </div>
@@ -583,9 +583,9 @@ const ExecutionStepCard: React.FC<ExecutionStepCardProps> = ({
   const getStatusIcon = (status: ExecutionStep['status']) => {
     switch (status) {
       case 'running': return <Activity size={16} className="text-sci-cyan animate-pulse" />;
-      case 'completed': return <CheckCircle size={16} className="text-green-500" />;
-      case 'error': return <XCircle size={16} className="text-red-500" />;
-      case 'waiting_decision': return <AlertCircle size={16} className="text-orange-500 animate-bounce" />;
+      case 'completed': return <CheckCircle size={16} className="text-sci-green" />;
+      case 'error': return <XCircle size={16} className="text-sci-red" />;
+      case 'waiting_decision': return <AlertCircle size={16} className="text-sci-violet animate-bounce" />;
       default: return <Clock size={16} className="text-sci-dim" />;
     }
   };
@@ -593,8 +593,8 @@ const ExecutionStepCard: React.FC<ExecutionStepCardProps> = ({
   const getServerStatusIcon = (status: ServerExecutionResult['status']) => {
     switch (status) {
       case 'running': return <div className="w-2 h-2 rounded-full bg-sci-cyan animate-pulse" />;
-      case 'success': return <CheckCircle size={12} className="text-green-500" />;
-      case 'error': return <XCircle size={12} className="text-red-500" />;
+      case 'success': return <CheckCircle size={12} className="text-sci-green" />;
+      case 'error': return <XCircle size={12} className="text-sci-red" />;
       case 'skipped': return <div className="w-2 h-2 rounded-full bg-sci-dim" />;
       default: return <div className="w-2 h-2 rounded-full bg-sci-dim/50" />;
     }
@@ -609,9 +609,9 @@ const ExecutionStepCard: React.FC<ExecutionStepCardProps> = ({
                     ${step.status === 'running' 
                       ? 'border-sci-cyan/50 bg-sci-cyan/5' 
                       : step.status === 'completed'
-                        ? 'border-green-500/30 bg-green-500/5'
+                        ? 'border-sci-green/30 bg-sci-green/5'
                         : step.status === 'error'
-                          ? 'border-red-500/30 bg-red-500/5'
+                          ? 'border-sci-red/30 bg-sci-red/5'
                           : 'border-white/10 bg-black/20'
                     }`}>
       {/* 步骤头部 */}
@@ -624,9 +624,9 @@ const ExecutionStepCard: React.FC<ExecutionStepCardProps> = ({
                           ${step.status === 'running' 
                             ? 'bg-sci-cyan/20 text-sci-cyan' 
                             : step.status === 'completed'
-                              ? 'bg-green-500/20 text-green-500'
+                              ? 'bg-sci-green/20 text-sci-green'
                               : step.status === 'error'
-                                ? 'bg-red-500/20 text-red-500'
+                                ? 'bg-sci-red/20 text-sci-red'
                                 : 'bg-sci-dim/20 text-sci-dim'
                           }`}>
             <span className="text-sm font-bold">{step.stepNumber}</span>
@@ -644,7 +644,7 @@ const ExecutionStepCard: React.FC<ExecutionStepCardProps> = ({
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-[10px] text-sci-dim">
             <span className="flex items-center gap-1">
-              <CheckCircle size={10} className="text-green-500" />
+              <CheckCircle size={10} className="text-sci-green" />
               {completedCount}/{step.serverResults.length}
             </span>
           </div>
@@ -693,8 +693,8 @@ const ExecutionStepCard: React.FC<ExecutionStepCardProps> = ({
                   )}
                   
                   {result.error && (
-                    <div className="mt-2 p-2 rounded bg-red-500/10 border border-red-500/30
-                                    text-[10px] text-red-400">
+                    <div className="mt-2 p-2 rounded bg-sci-red/10 border border-sci-red/30
+                                    text-[10px] text-sci-red">
                       {result.error}
                     </div>
                   )}
@@ -710,8 +710,8 @@ const ExecutionStepCard: React.FC<ExecutionStepCardProps> = ({
                       AI 决策
                     </span>
                     {step.aiDecision.requiresConfirmation && (
-                      <span className="px-1.5 py-0.5 rounded bg-orange-500/20 
-                                       text-[9px] text-orange-400">
+                      <span className="px-1.5 py-0.5 rounded bg-sci-violet/20 
+                                       text-[9px] text-sci-violet">
                         需要确认
                       </span>
                     )}
